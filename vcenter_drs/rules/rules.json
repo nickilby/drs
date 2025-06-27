@@ -1,0 +1,27 @@
+[
+  {
+    "type": "anti-affinity",
+    "level": "host",
+    "vms": ["WEB01", "WEB02"]
+  },
+  {
+    "type": "anti-affinity",
+    "level": "host",
+    "vms": ["CACHE1", "CACHE2"]
+  },
+  {
+    "type": "anti-affinity",
+    "level": "host",
+    "vms": ["CACHE1", "CMS"]
+  },
+  {
+    "type": "anti-affinity",
+    "level": "host",
+    "vms": ["v14-ES1", "v14-ES2", "v14-ES3"]
+  },
+  {
+    "type": "affinity",
+    "level": "host",
+    "role": ["SQL", "CMS"]
+  }
+] 
