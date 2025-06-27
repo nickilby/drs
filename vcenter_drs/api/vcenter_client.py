@@ -30,4 +30,4 @@ class VCenterClient:
 
 # Example usage:
 vc = VCenterClient()  # Loads from credentials.json by default
-# vc = VCenterClient(host="10.65.0.200", username="user", password="pass") 
+# vc = VCenterClient(host="10.0.0.1", username="user", password="pass") 
