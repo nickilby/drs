@@ -22,7 +22,7 @@ class VCenterClient:
             self.host = host
             self.username = username
             self.password = password
-        self.wsdl_url = f"https://{self.host}/sdk/vimService?wsdl"
+        self.wsdl_url = os.path.join(os.path.dirname(__file__), "vimService.wsdl")
         session = requests.Session()
         session.verify = False  # Ignore SSL verification
         self.client = Client(self.wsdl_url, transport=Transport(session=session))
@@ -31,3 +31,5 @@ class VCenterClient:
 # Example usage:
 vc = VCenterClient()  # Loads from credentials.json by default
 # vc = VCenterClient(host="10.0.0.1", username="user", password="pass") 
+
+print(vc.client.wsdl.bindings) 
