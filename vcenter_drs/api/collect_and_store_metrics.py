@@ -22,6 +22,20 @@ def get_latest_metric(perf_manager, entity, counter_id, instance=""):
         return results[0].value[0].value[0]
     return None
 
+def get_vm_datastore(vm):
+    """
+    Get the primary datastore that the VM is stored on.
+    Returns the datastore name or None if not found.
+    """
+    try:
+        # Get the VM's datastore from its config
+        if hasattr(vm, 'datastore') and vm.datastore:
+            # Return the first datastore (primary datastore)
+            return vm.datastore[0].name
+        return None
+    except Exception:
+        return None
+
 def get_or_create(cursor, table, name, extra_fields=None):
     # Try to get the id, or insert and return new id
     query = f"SELECT id FROM {table} WHERE name = %s"
@@ -116,19 +130,29 @@ def main():
                         # Handle VMs
                         for vm in getattr(host, 'vm', []):
                             current_vm_names.add(vm.name)  # Track current VM
+                            
+                            # Get datastore information
+                            datastore_name = get_vm_datastore(vm)
+                            dataset_id = None
+                            if datastore_name:
+                                dataset_id = get_or_create(cursor, 'datasets', datastore_name)
+                            
                             cursor.execute(
-                                "SELECT id, host_id FROM vms WHERE name = %s", (vm.name,)
+                                "SELECT id, host_id, dataset_id FROM vms WHERE name = %s", (vm.name,)
                             )
                             row = cursor.fetchone()
                             if row:
-                                vm_id, old_host_id = row
-                                if old_host_id != host_id:
+                                vm_id, old_host_id, old_dataset_id = row
+                                # Update if host or dataset changed
+                                if old_host_id != host_id or old_dataset_id != dataset_id:
                                     cursor.execute(
-                                        "UPDATE vms SET host_id = %s WHERE id = %s", (host_id, vm_id)
+                                        "UPDATE vms SET host_id = %s, dataset_id = %s WHERE id = %s", 
+                                        (host_id, dataset_id, vm_id)
                                     )
                             else:
                                 cursor.execute(
-                                    "INSERT INTO vms (name, host_id) VALUES (%s, %s)", (vm.name, host_id)
+                                    "INSERT INTO vms (name, host_id, dataset_id) VALUES (%s, %s, %s)", 
+                                    (vm.name, host_id, dataset_id)
                                 )
                                 vm_id = cursor.lastrowid
                             cpu = get_latest_metric(perf_manager, vm, cpu_id)

@@ -31,9 +31,13 @@ def get_db_state():
     # Get hosts
     cursor.execute('SELECT * FROM hosts')
     hosts = {row['id']: {'name': row['name'], 'cluster_id': row['cluster_id']} for row in cursor.fetchall()}
-    # Get VMs
-    cursor.execute('SELECT * FROM vms')
-    vms = {row['id']: {'name': row['name'], 'host_id': row['host_id']} for row in cursor.fetchall()}
+    # Get VMs (with dataset info)
+    cursor.execute('''
+        SELECT v.id, v.name, v.host_id, v.dataset_id, d.name as dataset_name
+        FROM vms v
+        LEFT JOIN datasets d ON v.dataset_id = d.id
+    ''')
+    vms = {row['id']: {'name': row['name'], 'host_id': row['host_id'], 'dataset_id': row['dataset_id'], 'dataset_name': row['dataset_name']} for row in cursor.fetchall()}
     cursor.close()
     db.close()
     return clusters, hosts, vms
@@ -139,6 +143,63 @@ def evaluate_rules(cluster_filter=None):
                     msg.append("Suggestions:")
                     msg += [f"  - Move VM {vms[vid]['name']} to a different host" for vid in group[1:]]
                     cluster_violations[cluster_name].append("\n".join(msg))
+
+    # Dataset affinity rules
+    # Track which VMs have already been processed by dataset-affinity rules
+    processed_vms = set()
+    
+    for rule in rules:
+        if rule.get('type') == 'dataset-affinity' and 'dataset_pattern' in rule:
+            patterns = rule['dataset_pattern']
+            
+            # Role-based
+            if 'role' in rule:
+                role = rule['role'].upper() if isinstance(rule['role'], str) else [r.upper() for r in rule['role']]
+                for vm_id, vm in vms.items():
+                    if vm_id in processed_vms:
+                        continue
+                    alias, vm_role = vm_alias_role[vm_id]
+                    if (isinstance(role, str) and vm_role == role) or (isinstance(role, list) and vm_role in role):
+                        dataset_name = vm.get('dataset_name') or ''
+                        if not any(pat in dataset_name for pat in patterns):
+                            # Find cluster for this VM
+                            host = hosts.get(vm['host_id'])
+                            if not host:
+                                continue
+                            cluster_id = host['cluster_id']
+                            cluster_name = clusters[cluster_id]
+                            msg = [
+                                "Dataset Affinity Violation",
+                                f"Rule: {vm['name']} (role: {vm_role}) must be on a dataset containing {patterns}",
+                                f"Current dataset: {dataset_name if dataset_name else 'None'}",
+                                "Suggestions:",
+                                f"  - Move VM {vm['name']} to a datastore containing one of: {patterns}"
+                            ]
+                            cluster_violations[cluster_name].append("\n".join(msg))
+                        processed_vms.add(vm_id)
+            # Name-pattern-based
+            if 'name_pattern' in rule:
+                name_pattern = rule['name_pattern']
+                for vm_id, vm in vms.items():
+                    if vm_id in processed_vms:
+                        continue
+                    if name_pattern in vm['name']:
+                        dataset_name = vm.get('dataset_name') or ''
+                        if not any(pat in dataset_name for pat in patterns):
+                            host = hosts.get(vm['host_id'])
+                            if not host:
+                                continue
+                            cluster_id = host['cluster_id']
+                            cluster_name = clusters[cluster_id]
+                            msg = [
+                                "Dataset Affinity Violation",
+                                f"Rule: {vm['name']} (name contains: {name_pattern}) must be on a dataset containing {patterns}",
+                                f"Current dataset: {dataset_name if dataset_name else 'None'}",
+                                "Suggestions:",
+                                f"  - Move VM {vm['name']} to a datastore containing one of: {patterns}"
+                            ]
+                            cluster_violations[cluster_name].append("\n".join(msg))
+                        processed_vms.add(vm_id)
 
     # Print violations grouped by cluster
     for cluster_name, violations in cluster_violations.items():

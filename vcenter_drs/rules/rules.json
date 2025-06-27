@@ -1,5 +1,10 @@
 [
   {
+    "type": "dataset-affinity",
+    "name_pattern": "-dr-",
+    "dataset_pattern": ["TRA"]
+  },
+  {
     "type": "anti-affinity",
     "level": "host",
     "role": "WEB"
@@ -28,5 +33,25 @@
     "type": "affinity",
     "level": "host",
     "role": ["SQL", "CMS"]
+  },
+  {
+    "type": "dataset-affinity",
+    "role": "SQL",
+    "dataset_pattern": ["DAT", "MIR"]
+  },
+  {
+    "type": "dataset-affinity",
+    "name_pattern": "WEB2",
+    "dataset_pattern": ["WEB"]
+  },
+  {
+    "type": "dataset-affinity",
+    "name_pattern": "WEB1",
+    "dataset_pattern": ["TRA"]
+  },
+  {
+    "type": "dataset-affinity",
+    "role": ["LB", "CACHE", "v14-ES"],
+    "dataset_pattern": ["TRA"]
   }
 ] 

@@ -54,11 +54,20 @@ class MetricsDB:
             ) ENGINE=InnoDB;
         ''')
         cursor.execute('''
+            CREATE TABLE IF NOT EXISTS datasets (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(255) UNIQUE,
+                description TEXT
+            ) ENGINE=InnoDB;
+        ''')
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS vms (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 name VARCHAR(255),
                 host_id INT,
-                FOREIGN KEY (host_id) REFERENCES hosts(id)
+                dataset_id INT,
+                FOREIGN KEY (host_id) REFERENCES hosts(id),
+                FOREIGN KEY (dataset_id) REFERENCES datasets(id)
             ) ENGINE=InnoDB;
         ''')
         cursor.execute('''
