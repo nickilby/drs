@@ -2,22 +2,27 @@
   {
     "type": "anti-affinity",
     "level": "host",
-    "vms": "WEB"
+    "role": "WEB"
   },
   {
     "type": "anti-affinity",
     "level": "host",
-    "vms": "CACHE"
+    "role": "CACHE"
   },
   {
     "type": "anti-affinity",
     "level": "host",
-    "vms": ["CACHE", "CMS"]
+    "role": "LB"
   },
   {
     "type": "anti-affinity",
     "level": "host",
-    "vms": ["v14-ES"]
+    "role": ["CACHE", "CMS"]
+  },
+  {
+    "type": "anti-affinity",
+    "level": "host",
+    "role": ["v14-ES"]
   },
   {
     "type": "affinity",

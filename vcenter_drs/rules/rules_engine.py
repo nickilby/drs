@@ -46,6 +46,10 @@ def print_violation_header(title):
 def evaluate_rules(cluster_filter=None):
     rules = load_rules()
     clusters, hosts, vms = get_db_state()
+    
+    # Debug: Print all clusters
+    print(f"DEBUG: All clusters: {list(clusters.values())}")
+    
     # Filter clusters if a filter is provided
     if cluster_filter and cluster_filter != "All Clusters":
         if isinstance(cluster_filter, str):
@@ -55,6 +59,10 @@ def evaluate_rules(cluster_filter=None):
         cluster_ids = [cid for cid, name in clusters.items() if name in cluster_names]
         hosts = {hid: h for hid, h in hosts.items() if h['cluster_id'] in cluster_ids}
         vms = {vid: v for vid, v in vms.items() if v['host_id'] in hosts}
+        print(f"DEBUG: Filtered to clusters: {cluster_names}")
+        print(f"DEBUG: Filtered hosts: {len(hosts)}")
+        print(f"DEBUG: Filtered VMs: {len(vms)}")
+    
     vm_name_to_id = {vm['name']: vm_id for vm_id, vm in vms.items()}
     vm_alias_role = {}
     for vm_id, vm in vms.items():
@@ -139,6 +147,7 @@ def evaluate_rules(cluster_filter=None):
                     cluster_violations[cluster_name].append("\n".join(msg))
 
     # Print violations grouped by cluster
+    print(f"DEBUG: Clusters with violations: {list(cluster_violations.keys())}")
     for cluster_name, violations in cluster_violations.items():
         print("\n" + "#" * 40)
         print(f"Cluster: {cluster_name}")
