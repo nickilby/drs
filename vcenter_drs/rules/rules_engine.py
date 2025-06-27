@@ -43,9 +43,20 @@ def print_violation_header(title):
     print(title)
     print("-" * 30)
 
-def evaluate_rules():
+def evaluate_rules(cluster_filter=None):
     rules = load_rules()
     clusters, hosts, vms = get_db_state()
+    # Filter clusters if a filter is provided
+    if cluster_filter and cluster_filter != "All Clusters":
+        # Find cluster IDs matching the filter (support string or list)
+        if isinstance(cluster_filter, str):
+            cluster_names = [cluster_filter]
+        else:
+            cluster_names = cluster_filter
+        cluster_ids = [cid for cid, name in clusters.items() if name in cluster_names]
+        # Filter hosts and vms to only those in the selected clusters
+        hosts = {hid: h for hid, h in hosts.items() if h['cluster_id'] in cluster_ids}
+        vms = {vid: v for vid, v in vms.items() if v['host_id'] in hosts}
     vm_name_to_id = {vm['name']: vm_id for vm_id, vm in vms.items()}
     # Build VM alias/role map
     vm_alias_role = {}
@@ -99,23 +110,24 @@ def evaluate_rules():
                     for vid in group_vm_ids[1:]:
                         print(f"  - Move VM {vms[vid]['name']} to a different host")
     # VM-specific anti-affinity (unchanged)
-    if rule['type'] == 'anti-affinity' and 'vms' in rule:
-        vm_ids = [vm_name_to_id.get(name) for name in rule['vms'] if vm_name_to_id.get(name)]
-        host_groups = defaultdict(list)
-        for vm_id in vm_ids:
-            host_id = vms[vm_id]['host_id']
-            host_groups[host_id].append(vm_id)
-        for host_id, group in host_groups.items():
-            if len(group) > 1:
-                print_violation_header("Anti-Affinity Violation")
-                print(f"Rule: VMs {rule['vms']} must not be on the same host")
-                print(f"Host: {hosts[host_id]['name']}")
-                print("VMs on this host:")
-                for vid in group:
-                    print(f"  - {vms[vid]['name']}")
-                print("Suggestions:")
-                for vid in group[1:]:
-                    print(f"  - Move VM {vms[vid]['name']} to a different host")
+    for rule in rules:
+        if rule['type'] == 'anti-affinity' and 'vms' in rule:
+            vm_ids = [vm_name_to_id.get(name) for name in rule['vms'] if vm_name_to_id.get(name)]
+            host_groups = defaultdict(list)
+            for vm_id in vm_ids:
+                host_id = vms[vm_id]['host_id']
+                host_groups[host_id].append(vm_id)
+            for host_id, group in host_groups.items():
+                if len(group) > 1:
+                    print_violation_header("Anti-Affinity Violation")
+                    print(f"Rule: VMs {rule['vms']} must not be on the same host")
+                    print(f"Host: {hosts[host_id]['name']}")
+                    print("VMs on this host:")
+                    for vid in group:
+                        print(f"  - {vms[vid]['name']}")
+                    print("Suggestions:")
+                    for vid in group[1:]:
+                        print(f"  - Move VM {vms[vid]['name']} to a different host")
 
 if __name__ == "__main__":
     evaluate_rules() 

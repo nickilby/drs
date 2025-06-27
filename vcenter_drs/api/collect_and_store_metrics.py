@@ -78,7 +78,21 @@ def main():
                                 )
                         # Handle VMs
                         for vm in getattr(host, 'vm', []):
-                            vm_id = get_or_create(cursor, 'vms', vm.name, {'host_id': host_id})
+                            cursor.execute(
+                                "SELECT id, host_id FROM vms WHERE name = %s", (vm.name,)
+                            )
+                            row = cursor.fetchone()
+                            if row:
+                                vm_id, old_host_id = row
+                                if old_host_id != host_id:
+                                    cursor.execute(
+                                        "UPDATE vms SET host_id = %s WHERE id = %s", (host_id, vm_id)
+                                    )
+                            else:
+                                cursor.execute(
+                                    "INSERT INTO vms (name, host_id) VALUES (%s, %s)", (vm.name, host_id)
+                                )
+                                vm_id = cursor.lastrowid
                             cpu = get_latest_metric(perf_manager, vm, cpu_id)
                             mem = get_latest_metric(perf_manager, vm, mem_id)
                             for metric_name, value in [("cpu.usage.average", cpu), ("mem.usage.average", mem)]:

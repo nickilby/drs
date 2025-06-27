@@ -2,4 +2,5 @@ zeep
 requests
 lxml
 pyvmomi
-mysql-connector-python 
+mysql-connector-python
+streamlit
