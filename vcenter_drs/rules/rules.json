@@ -2,22 +2,22 @@
   {
     "type": "anti-affinity",
     "level": "host",
-    "vms": ["WEB01", "WEB02"]
+    "vms": "WEB"
   },
   {
     "type": "anti-affinity",
     "level": "host",
-    "vms": ["CACHE1", "CACHE2"]
+    "vms": "CACHE"
   },
   {
     "type": "anti-affinity",
     "level": "host",
-    "vms": ["CACHE1", "CMS"]
+    "vms": ["CACHE", "CMS"]
   },
   {
     "type": "anti-affinity",
     "level": "host",
-    "vms": ["v14-ES1", "v14-ES2", "v14-ES3"]
+    "vms": ["v14-ES"]
   },
   {
     "type": "affinity",
