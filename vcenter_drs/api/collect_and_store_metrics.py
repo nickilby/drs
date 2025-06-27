@@ -40,6 +40,40 @@ def get_or_create(cursor, table, name, extra_fields=None):
         cursor.execute(insert, (name,))
     return cursor.lastrowid
 
+def cleanup_stale_vms(cursor, current_vm_names):
+    """
+    Remove VMs from the database that no longer exist in vCenter
+    """
+    # Get all VMs currently in the database
+    cursor.execute("SELECT id, name FROM vms")
+    db_vms = cursor.fetchall()
+    
+    # Find VMs that exist in DB but not in vCenter
+    stale_vm_ids = []
+    for vm_id, vm_name in db_vms:
+        if vm_name not in current_vm_names:
+            stale_vm_ids.append(vm_id)
+    
+    if stale_vm_ids:
+        print(f"Found {len(stale_vm_ids)} stale VMs to remove")
+        
+        # Remove metrics for stale VMs first (due to foreign key constraints)
+        placeholders = ','.join(['%s'] * len(stale_vm_ids))
+        cursor.execute(
+            f"DELETE FROM metrics WHERE object_type = 'vm' AND object_id IN ({placeholders})",
+            stale_vm_ids
+        )
+        print(f"Removed metrics for {cursor.rowcount} stale VMs")
+        
+        # Remove the stale VMs
+        cursor.execute(
+            f"DELETE FROM vms WHERE id IN ({placeholders})",
+            stale_vm_ids
+        )
+        print(f"Removed {cursor.rowcount} stale VMs from database")
+    else:
+        print("No stale VMs found")
+
 def main():
     # Connect to vCenter
     client = VCenterPyVmomiClient()
@@ -57,6 +91,9 @@ def main():
     cpu_id = get_perf_counter_id(perf_manager, "cpu.usage.average")
     mem_id = get_perf_counter_id(perf_manager, "mem.usage.average")
     now = datetime.now()
+
+    # Track all current VMs for cleanup
+    current_vm_names = set()
 
     for dc in content.rootFolder.childEntity:
         # Handle clusters
@@ -78,6 +115,7 @@ def main():
                                 )
                         # Handle VMs
                         for vm in getattr(host, 'vm', []):
+                            current_vm_names.add(vm.name)  # Track current VM
                             cursor.execute(
                                 "SELECT id, host_id FROM vms WHERE name = %s", (vm.name,)
                             )
@@ -101,6 +139,11 @@ def main():
                                         "INSERT INTO metrics (object_type, object_id, metric_name, value, timestamp) VALUES (%s, %s, %s, %s, %s)",
                                         ("vm", vm_id, metric_name, value, now)
                                     )
+    
+    # Clean up stale VMs
+    print(f"Found {len(current_vm_names)} VMs currently in vCenter")
+    cleanup_stale_vms(cursor, current_vm_names)
+    
     db.conn.commit()
     cursor.close()
     db.close()
