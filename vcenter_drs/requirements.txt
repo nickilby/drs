@@ -1,1 +1,5 @@
-zeep 
+zeep
+requests
+lxml
+pyvmomi
+mysql-connector-python 
