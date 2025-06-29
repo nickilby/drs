@@ -16,7 +16,6 @@ import json
 import ssl
 from typing import Optional, Dict, Any
 from pyVim.connect import SmartConnect, Disconnect
-from pyVim.connect import SmartConnectNoSSL, Disconnect
 from pyVmomi import vim
 
 
