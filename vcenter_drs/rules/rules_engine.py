@@ -4,6 +4,7 @@ import os
 import json
 from db.metrics_db import MetricsDB
 from collections import defaultdict
+import re
 
 def load_rules(rules_path=None):
     if rules_path is None:
@@ -12,12 +13,21 @@ def load_rules(rules_path=None):
         return json.load(f)
 
 def parse_alias_and_role(vm_name):
-    # Assumes VM name format: z-<alias>-<role><number>
-    parts = vm_name.split('-')
-    if len(parts) >= 3:
-        alias = parts[1]
-        role_num = parts[2]
-        role = ''.join([c for c in role_num if not c.isdigit()])
+    # Remove 'z-' prefix if present
+    if vm_name.startswith('z-'):
+        name = vm_name[2:]
+    else:
+        name = vm_name
+
+    # Remove trailing number (if any)
+    match = re.match(r'(.+)-(\D+)(\d+)$', name)
+    if match:
+        alias = match.group(1)
+        role = match.group(2)
+        return alias.lower(), role.upper()
+    # If no trailing number, split from right on dash
+    if '-' in name:
+        alias, role = name.rsplit('-', 1)
         return alias.lower(), role.upper()
     return None, None
 
