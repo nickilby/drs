@@ -21,13 +21,36 @@ selected_cluster = st.selectbox("Select a cluster to check compliance:", ["All C
 st.write(f"### Compliance Results for: {selected_cluster}")
 
 # Patch: temporarily redirect stdout to capture rules engine output
-def run_rules_engine_for_cluster(selected_cluster):
+def run_rules_engine_for_cluster(selected_cluster, return_grouped=False):
     import io
     import contextlib
     output = io.StringIO()
     with contextlib.redirect_stdout(output):
         evaluate_rules(selected_cluster if selected_cluster != "All Clusters" else None)
-    return output.getvalue()
+    result = output.getvalue()
+    # Parse output into grouped violations by cluster
+    grouped = {}
+    current_cluster = None
+    current_violation = []
+    for line in result.splitlines():
+        if line.startswith("########################################"):  # Cluster header
+            continue
+        elif line.startswith("Cluster: "):
+            current_cluster = line.replace("Cluster: ", "").strip()
+            grouped[current_cluster] = []
+        elif line.startswith("------------------------------") or line.startswith("-------------------------------"):
+            continue
+        elif line.strip() == "":
+            if current_violation and current_cluster:
+                grouped[current_cluster].append("\n".join(current_violation))
+                current_violation = []
+        else:
+            current_violation.append(line)
+    if current_violation and current_cluster:
+        grouped[current_cluster].append("\n".join(current_violation))
+    if return_grouped:
+        return grouped
+    return result
 
 def get_last_collection_time():
     try:
@@ -64,18 +87,18 @@ if st.button("Refresh Data from vCenter"):
     progress.progress(100)
     st.success("Data refreshed from vCenter!")
 
-if st.button("Display Results"):
-    results = run_rules_engine_for_cluster(selected_cluster)
-    # Remove connection messages
-    filtered = "\n".join([
-        line for line in results.splitlines()
-        if "Connected to MySQL database." not in line and "Database connection closed." not in line
-    ]).strip()
-
-    if not filtered:
+if st.button("Run Compliance Check"):
+    grouped_results = run_rules_engine_for_cluster(selected_cluster, return_grouped=True)
+    if not grouped_results or all(len(v) == 0 for v in grouped_results.values()):
         st.success("✅ All VMs in this cluster are compliant! No violations found.")
         st.balloons()
     else:
-        st.code(filtered)
+        for cluster_name, violations in grouped_results.items():
+            st.markdown(f"### Cluster: {cluster_name}")
+            for idx, violation in enumerate(violations):
+                with st.expander(f"Violation {idx+1}", expanded=True):
+                    st.code(violation)
+                    if st.button(f"Remediate Violation {cluster_name}-{idx+1}"):
+                        st.success(f"Remediation triggered for violation {idx+1} in {cluster_name} (dummy action)")
 else:
     st.info("Click 'Run Compliance Check' to evaluate compliance for the selected cluster.") 
