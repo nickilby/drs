@@ -10,34 +10,59 @@
     "dataset_pattern": ["MIR"]
   },
   {
-    "type": "anti-affinity",
-    "level": "host",
-    "role": "WEB"
+    "type": "dataset-affinity",
+    "role": ["SQL"],
+    "dataset_pattern": ["DAT", "MIR"]
+  },
+  {
+    "type": "dataset-affinity",
+    "name_pattern": "WEB2",
+    "dataset_pattern": ["WEB"]
+  },
+  {
+    "type": "dataset-affinity",
+    "name_pattern": "WEB1",
+    "dataset_pattern": ["TRA"]
+  },
+  {
+    "type": "dataset-affinity",
+    "role": ["LB", "CACHE", "v14-ES"],
+    "dataset_pattern": ["TRA"]
   },
   {
     "type": "anti-affinity",
     "level": "host",
-    "role": "etcd-"
+    "role": ["WEB"]
   },
   {
     "type": "anti-affinity",
     "level": "host",
-    "role": "keeper"
+    "role": ["request-handler-lb"]
   },
   {
     "type": "anti-affinity",
     "level": "host",
-    "role": "controller-"
+    "role": ["etcd-"]
   },
   {
     "type": "anti-affinity",
     "level": "host",
-    "role": "CACHE"
+    "role": ["keeper"]
   },
   {
     "type": "anti-affinity",
     "level": "host",
-    "role": "LB"
+    "role": ["controller-"]
+  },
+  {
+    "type": "anti-affinity",
+    "level": "host",
+    "role": ["CACHE"]
+  },
+  {
+    "type": "anti-affinity",
+    "level": "host",
+    "role": ["LB"]
   },
   {
     "type": "anti-affinity",
@@ -65,28 +90,23 @@
     "role": ["utility"]
   },
   {
+    "type": "anti-affinity",
+    "level": "host",
+    "name_pattern": "z-minio-"
+  },
+  {
+    "type": "anti-affinity",
+    "level": "host",
+    "name_pattern": "z-kafka-"
+  },
+  {
+    "type": "anti-affinity",
+    "level": "host",
+    "name_pattern": "z-cockroach-"
+  },
+  {
     "type": "affinity",
     "level": "host",
     "role": ["SQL", "CMS"]
-  },
-  {
-    "type": "dataset-affinity",
-    "role": "SQL",
-    "dataset_pattern": ["DAT", "MIR"]
-  },
-  {
-    "type": "dataset-affinity",
-    "name_pattern": "WEB2",
-    "dataset_pattern": ["WEB"]
-  },
-  {
-    "type": "dataset-affinity",
-    "name_pattern": "WEB1",
-    "dataset_pattern": ["TRA"]
-  },
-  {
-    "type": "dataset-affinity",
-    "role": ["LB", "CACHE", "v14-ES"],
-    "dataset_pattern": ["TRA"]
   }
 ] 
