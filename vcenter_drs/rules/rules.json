@@ -5,9 +5,29 @@
     "dataset_pattern": ["TRA"]
   },
   {
+    "type": "dataset-affinity",
+    "name_pattern": "-dev-",
+    "dataset_pattern": ["MIR"]
+  },
+  {
     "type": "anti-affinity",
     "level": "host",
     "role": "WEB"
+  },
+  {
+    "type": "anti-affinity",
+    "level": "host",
+    "role": "etcd-"
+  },
+  {
+    "type": "anti-affinity",
+    "level": "host",
+    "role": "keeper"
+  },
+  {
+    "type": "anti-affinity",
+    "level": "host",
+    "role": "controller-"
   },
   {
     "type": "anti-affinity",
@@ -28,6 +48,21 @@
     "type": "anti-affinity",
     "level": "host",
     "role": ["v14-ES"]
+  },
+  {
+    "type": "anti-affinity",
+    "level": "host",
+    "role": ["redis"]
+  },
+  {
+    "type": "anti-affinity",
+    "level": "host",
+    "role": ["broker"]
+  },
+  {
+    "type": "anti-affinity",
+    "level": "host",
+    "role": ["utility"]
   },
   {
     "type": "affinity",
