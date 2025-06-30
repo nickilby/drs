@@ -5,7 +5,7 @@
     "dataset_pattern": ["TRA"]
   },
   {
-    "type": "dataset-affinity",
+    "type": "dataset-anti-affinity",
     "name_pattern": "-dev-",
     "dataset_pattern": ["MIR"]
   },

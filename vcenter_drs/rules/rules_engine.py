@@ -286,6 +286,88 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                             structured_violations.append(violation_obj)
                         processed_vms.add(vm_id)
 
+    # Dataset anti-affinity rules
+    for rule in rules:
+        if rule.get('type') == 'dataset-anti-affinity' and 'dataset_pattern' in rule:
+            patterns = rule['dataset_pattern']
+            # Role-based
+            if 'role' in rule:
+                role = rule['role'].upper() if isinstance(rule['role'], str) else [r.upper() for r in rule['role']]
+                # Group VMs by dataset
+                dataset_groups = defaultdict(list)
+                for vm_id, vm in vms.items():
+                    alias, vm_role = vm_alias_role[vm_id]
+                    dataset_name = vm.get('dataset_name') or ''
+                    if ((isinstance(role, str) and vm_role == role) or (isinstance(role, list) and vm_role in role)) and any(pat in dataset_name for pat in patterns):
+                        dataset_groups[dataset_name].append((vm_id, vm))
+                for dataset, group in dataset_groups.items():
+                    if len(group) > 1:
+                        # Violation: more than one matching VM on the same dataset
+                        cluster_ids = set(hosts[vm['host_id']]['cluster_id'] for vm_id, vm in group)
+                        for cluster_id in cluster_ids:
+                            cluster_name = clusters[cluster_id]
+                            vms_on_dataset = [vm['name'] for vm_id, vm in group if hosts[vm['host_id']]['cluster_id'] == cluster_id]
+                            msg = [
+                                "Dataset Anti-Affinity Violation",
+                                f"Rule: VMs with role(s) {role} must NOT be on the same dataset matching {patterns}",
+                                f"Dataset: {dataset}",
+                                "VMs on this dataset:",
+                            ]
+                            msg += [f"  - {name}" for name in vms_on_dataset]
+                            msg.append("Suggestions:")
+                            msg += [f"  - Move VM {name} to a different dataset" for name in vms_on_dataset[1:]]
+                            violation_text = "\n".join(msg)
+                            violation_obj = {
+                                "type": rule['type'],
+                                "rule": rule,
+                                "alias": None,
+                                "affected_vms": vms_on_dataset,
+                                "cluster": cluster_name,
+                                "violation_text": violation_text
+                            }
+                            if violation_is_exception(violation_obj):
+                                continue
+                            cluster_violations[cluster_name].append(violation_text)
+                            structured_violations.append(violation_obj)
+            # Name-pattern-based
+            if 'name_pattern' in rule:
+                name_pattern = rule['name_pattern']
+                dataset_groups = defaultdict(list)
+                for vm_id, vm in vms.items():
+                    if name_pattern in vm['name']:
+                        alias, vm_role = vm_alias_role[vm_id]
+                        dataset_name = vm.get('dataset_name') or ''
+                        if any(pat in dataset_name for pat in patterns):
+                            dataset_groups[dataset_name].append((vm_id, vm))
+                for dataset, group in dataset_groups.items():
+                    if len(group) > 1:
+                        cluster_ids = set(hosts[vm['host_id']]['cluster_id'] for vm_id, vm in group)
+                        for cluster_id in cluster_ids:
+                            cluster_name = clusters[cluster_id]
+                            vms_on_dataset = [vm['name'] for vm_id, vm in group if hosts[vm['host_id']]['cluster_id'] == cluster_id]
+                            msg = [
+                                "Dataset Anti-Affinity Violation",
+                                f"Rule: VMs with name containing '{name_pattern}' must NOT be on the same dataset matching {patterns}",
+                                f"Dataset: {dataset}",
+                                "VMs on this dataset:",
+                            ]
+                            msg += [f"  - {name}" for name in vms_on_dataset]
+                            msg.append("Suggestions:")
+                            msg += [f"  - Move VM {name} to a different dataset" for name in vms_on_dataset[1:]]
+                            violation_text = "\n".join(msg)
+                            violation_obj = {
+                                "type": rule['type'],
+                                "rule": rule,
+                                "alias": None,
+                                "affected_vms": vms_on_dataset,
+                                "cluster": cluster_name,
+                                "violation_text": violation_text
+                            }
+                            if violation_is_exception(violation_obj):
+                                continue
+                            cluster_violations[cluster_name].append(violation_text)
+                            structured_violations.append(violation_obj)
+
     # Print violations grouped by cluster
     for cluster_name, violations in cluster_violations.items():
         print("\n" + "#" * 40)
