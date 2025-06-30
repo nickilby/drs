@@ -5,6 +5,7 @@ from api.collect_and_store_metrics import main as collect_and_store_metrics_main
 from rules.rules_engine import evaluate_rules, get_db_state
 import time
 import threading
+from collections import defaultdict
 
 st.set_page_config(page_title="vCenter DRS Compliance Dashboard", layout="wide")
 
@@ -88,17 +89,27 @@ if st.button("Refresh Data from vCenter"):
     st.success("Data refreshed from vCenter!")
 
 if st.button("Run Compliance Check"):
-    grouped_results = run_rules_engine_for_cluster(selected_cluster, return_grouped=True)
-    if not grouped_results or all(len(v) == 0 for v in grouped_results.values()):
+    # Use the new structured output
+    structured_violations = evaluate_rules(selected_cluster if selected_cluster != "All Clusters" else None, return_structured=True)
+    if not structured_violations:
         st.success("✅ All VMs in this cluster are compliant! No violations found.")
         st.balloons()
     else:
-        for cluster_name, violations in grouped_results.items():
+        # Group by cluster
+        cluster_grouped = defaultdict(list)
+        for v in structured_violations:
+            cluster_grouped[v["cluster"]].append(v)
+        for cluster_name, violations in cluster_grouped.items():
             st.markdown(f"### Cluster: {cluster_name}")
             for idx, violation in enumerate(violations):
-                with st.expander(f"Violation {idx+1}", expanded=True):
-                    st.code(violation)
+                expander_title = f"Alias: {violation['alias']} | Rule: {violation['type']}"
+                with st.expander(expander_title, expanded=True):
+                    st.code(violation["violation_text"])
+                    st.write(f"**Rule Type:** {violation['type']}")
+                    st.write(f"**Alias:** {violation['alias']}")
+                    st.write(f"**Affected VMs:** {', '.join(violation['affected_vms'])}")
                     if st.button(f"Remediate Violation {cluster_name}-{idx+1}"):
-                        st.success(f"Remediation triggered for violation {idx+1} in {cluster_name} (dummy action)")
+                        # Placeholder for actual API call logic
+                        st.success(f"Remediation triggered for violation {idx+1} in {cluster_name}.\nRule type: {violation['type']} | Alias: {violation['alias']} | VMs: {', '.join(violation['affected_vms'])}")
 else:
     st.info("Click 'Run Compliance Check' to evaluate compliance for the selected cluster.") 
