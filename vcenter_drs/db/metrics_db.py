@@ -114,6 +114,7 @@ class MetricsDB:
         - datasets: Storage datastores
         - vms: Virtual machines with host and dataset associations
         - metrics: Performance metrics for VMs and hosts
+        - exceptions: Exceptions for compliance rules
         
         Raises:
             Exception: If schema initialization fails
@@ -178,6 +179,20 @@ class MetricsDB:
                 ) ENGINE=InnoDB;
             ''')
             
+            # Create exceptions table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS exceptions (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    rule_type VARCHAR(64),
+                    alias VARCHAR(255),
+                    affected_vms TEXT,
+                    cluster VARCHAR(255),
+                    rule_hash VARCHAR(64),
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    reason TEXT
+                ) ENGINE=InnoDB;
+            ''')
+            
             self.conn.commit()
             print("Database schema initialized.")
             
@@ -205,6 +220,75 @@ class MetricsDB:
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Context manager exit point."""
         self.close()
+
+    def add_exception(self, exception_dict: dict) -> None:
+        """
+        Add an exception to the exceptions table.
+        exception_dict should contain: rule_type, alias, affected_vms (list), cluster, rule_hash, reason (optional)
+        """
+        if not self.conn:
+            self.connect()
+        cursor = self.conn.cursor()
+        import json as _json
+        cursor.execute('''
+            INSERT INTO exceptions (rule_type, alias, affected_vms, cluster, rule_hash, reason)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        ''', (
+            exception_dict.get('rule_type'),
+            exception_dict.get('alias'),
+            _json.dumps(exception_dict.get('affected_vms', [])),
+            exception_dict.get('cluster'),
+            exception_dict.get('rule_hash'),
+            exception_dict.get('reason', None)
+        ))
+        self.conn.commit()
+        cursor.close()
+
+    def get_exceptions(self) -> list:
+        """
+        Fetch all exceptions from the exceptions table.
+        Returns a list of dicts.
+        """
+        if not self.conn:
+            self.connect()
+        cursor = self.conn.cursor(dictionary=True)
+        cursor.execute('SELECT * FROM exceptions')
+        rows = cursor.fetchall()
+        cursor.close()
+        import json as _json
+        for row in rows:
+            if 'affected_vms' in row and row['affected_vms']:
+                try:
+                    row['affected_vms'] = _json.loads(row['affected_vms'])
+                except Exception:
+                    row['affected_vms'] = []
+        return rows
+
+    def is_exception(self, violation_dict: dict) -> bool:
+        """
+        Check if a violation matches any exception in the table.
+        Matching is based on rule_type, alias, affected_vms, and cluster.
+        """
+        exceptions = self.get_exceptions()
+        import hashlib
+        import json as _json
+        def make_hash(d):
+            # Use a stable hash of the relevant fields, normalized
+            alias = (d.get('alias') or '').strip().lower()
+            cluster = (d.get('cluster') or '').strip().lower()
+            affected_vms = [vm.strip().lower() for vm in d.get('affected_vms', [])]
+            relevant = {
+                'rule_type': d.get('type'),
+                'alias': alias,
+                'affected_vms': sorted(affected_vms),
+                'cluster': cluster
+            }
+            return hashlib.sha256(_json.dumps(relevant, sort_keys=True).encode()).hexdigest()
+        v_hash = make_hash(violation_dict)
+        for exc in exceptions:
+            if exc.get('rule_hash') == v_hash:
+                return True
+        return False
 
 # Example usage:
 # db = MetricsDB()  # Loads from credentials.json by default

@@ -6,6 +6,8 @@ from rules.rules_engine import evaluate_rules, get_db_state
 import time
 import threading
 from collections import defaultdict
+from db.metrics_db import MetricsDB
+import json
 
 st.set_page_config(page_title="vCenter DRS Compliance Dashboard", layout="wide")
 
@@ -88,28 +90,62 @@ if st.button("Refresh Data from vCenter"):
     progress.progress(100)
     st.success("Data refreshed from vCenter!")
 
+if 'violations' not in st.session_state:
+    st.session_state['violations'] = None
+
 if st.button("Run Compliance Check"):
     # Use the new structured output
     structured_violations = evaluate_rules(selected_cluster if selected_cluster != "All Clusters" else None, return_structured=True)
+    st.session_state['violations'] = structured_violations
     if not structured_violations:
         st.success("✅ All VMs in this cluster are compliant! No violations found.")
         st.balloons()
-    else:
-        # Group by cluster
-        cluster_grouped = defaultdict(list)
-        for v in structured_violations:
-            cluster_grouped[v["cluster"]].append(v)
-        for cluster_name, violations in cluster_grouped.items():
-            st.markdown(f"### Cluster: {cluster_name}")
-            for idx, violation in enumerate(violations):
-                expander_title = f"Alias: {violation['alias']} | Rule: {violation['type']}"
-                with st.expander(expander_title, expanded=True):
-                    st.code(violation["violation_text"])
-                    st.write(f"**Rule Type:** {violation['type']}")
-                    st.write(f"**Alias:** {violation['alias']}")
-                    st.write(f"**Affected VMs:** {', '.join(violation['affected_vms'])}")
-                    if st.button(f"Remediate Violation {cluster_name}-{idx+1}"):
-                        # Placeholder for actual API call logic
-                        st.success(f"Remediation triggered for violation {idx+1} in {cluster_name}.\nRule type: {violation['type']} | Alias: {violation['alias']} | VMs: {', '.join(violation['affected_vms'])}")
+
+# Only display violations if they exist in session state
+if st.session_state['violations']:
+    from collections import defaultdict
+    cluster_grouped = defaultdict(list)
+    for v in st.session_state['violations']:
+        cluster_grouped[v["cluster"]].append(v)
+    for cluster_name, violations in cluster_grouped.items():
+        st.markdown(f"### Cluster: {cluster_name}")
+        for idx, violation in enumerate(violations):
+            expander_title = f"Alias: {violation['alias']} | Rule: {violation['type']}"
+            with st.expander(expander_title, expanded=True):
+                st.code(violation["violation_text"])
+                st.write(f"**Rule Type:** {violation['type']}")
+                st.write(f"**Alias:** {violation['alias']}")
+                st.write(f"**Affected VMs:** {', '.join(violation['affected_vms'])}")
+                if st.button(f"Remediate Violation {cluster_name}-{idx+1}", key=f"remediate_{cluster_name}_{idx}"):
+                    st.success(f"Remediation triggered for violation {idx+1} in {cluster_name}.\nRule type: {violation['type']} | Alias: {violation['alias']} | VMs: {', '.join(violation['affected_vms'])}")
+                if st.button("Add Exception", key=f"add_exc_{cluster_name}_{idx}"):
+                    import hashlib
+                    # Normalize fields for robust matching
+                    alias = (violation.get('alias') or '').strip().lower()
+                    cluster = (violation.get('cluster') or '').strip().lower()
+                    affected_vms = [vm.strip().lower() for vm in violation.get('affected_vms', [])]
+                    relevant = {
+                        'rule_type': violation.get('type'),
+                        'alias': alias,
+                        'affected_vms': sorted(affected_vms),
+                        'cluster': cluster
+                    }
+                    rule_hash = hashlib.sha256(json.dumps(relevant, sort_keys=True).encode()).hexdigest()
+                    exception_data = {
+                        'rule_type': violation.get('type'),
+                        'alias': alias,
+                        'affected_vms': affected_vms,
+                        'cluster': cluster,
+                        'rule_hash': rule_hash,
+                        'reason': None
+                    }
+                    try:
+                        db = MetricsDB()
+                        db.connect()
+                        db.add_exception(exception_data)
+                        db.close()
+                        st.success(f"Exception added for Alias: {violation.get('alias')} | Rule: {violation.get('type')}. This violation will be ignored in future checks.")
+                    except Exception as e:
+                        st.error(f"[ERROR] Failed to add exception: {e}")
 else:
     st.info("Click 'Run Compliance Check' to evaluate compliance for the selected cluster.") 

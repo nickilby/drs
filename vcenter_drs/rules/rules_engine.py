@@ -50,6 +50,8 @@ def print_violation_header(title):
 def evaluate_rules(cluster_filter=None, return_structured=False):
     rules = load_rules()
     clusters, hosts, vms = get_db_state()
+    db = MetricsDB()
+    db.connect()
     
     # Filter clusters if a filter is provided
     if cluster_filter and cluster_filter != "All Clusters":
@@ -75,6 +77,9 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
     cluster_violations = defaultdict(list)
     structured_violations = []
 
+    def violation_is_exception(violation):
+        return db.is_exception(violation)
+
     for rule in rules:
         if 'role' not in rule:
             continue
@@ -99,15 +104,18 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                         msg.append("Suggestions:")
                         msg.append(f"  - Place all {', '.join(roles)} VMs for alias '{alias}' on the same host")
                         violation_text = "\n".join(msg)
-                        cluster_violations[cluster_name].append(violation_text)
-                        structured_violations.append({
+                        violation_obj = {
                             "type": rule['type'],
                             "rule": rule,
                             "alias": alias,
                             "affected_vms": [vms[vid]['name'] for vid in group_vm_ids],
                             "cluster": cluster_name,
                             "violation_text": violation_text
-                        })
+                        }
+                        if violation_is_exception(violation_obj):
+                            continue
+                        cluster_violations[cluster_name].append(violation_text)
+                        structured_violations.append(violation_obj)
                     elif rule['level'] == 'cluster' and len(cluster_ids) > 1:
                         msg = [
                             "Affinity Violation",
@@ -118,15 +126,18 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                         msg.append("Suggestions:")
                         msg.append(f"  - Place all {', '.join(roles)} VMs for alias '{alias}' in the same cluster")
                         violation_text = "\n".join(msg)
-                        cluster_violations[cluster_name].append(violation_text)
-                        structured_violations.append({
+                        violation_obj = {
                             "type": rule['type'],
                             "rule": rule,
                             "alias": alias,
                             "affected_vms": [vms[vid]['name'] for vid in group_vm_ids],
                             "cluster": cluster_name,
                             "violation_text": violation_text
-                        })
+                        }
+                        if violation_is_exception(violation_obj):
+                            continue
+                        cluster_violations[cluster_name].append(violation_text)
+                        structured_violations.append(violation_obj)
                 elif rule['type'] == 'anti-affinity':
                     if rule['level'] == 'host' and len(host_ids) == 1:
                         host_id = list(host_ids)[0]
@@ -140,15 +151,18 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                         msg.append("Suggestions:")
                         msg += [f"  - Move VM {vms[vid]['name']} to a different host" for vid in group_vm_ids[1:]]
                         violation_text = "\n".join(msg)
-                        cluster_violations[cluster_name].append(violation_text)
-                        structured_violations.append({
+                        violation_obj = {
                             "type": rule['type'],
                             "rule": rule,
                             "alias": alias,
                             "affected_vms": [vms[vid]['name'] for vid in group_vm_ids],
                             "cluster": cluster_name,
                             "violation_text": violation_text
-                        })
+                        }
+                        if violation_is_exception(violation_obj):
+                            continue
+                        cluster_violations[cluster_name].append(violation_text)
+                        structured_violations.append(violation_obj)
     # VM-specific anti-affinity (unchanged, but grouped by cluster)
     for rule in rules:
         if rule['type'] == 'anti-affinity' and 'vms' in rule:
@@ -171,15 +185,18 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                     msg.append("Suggestions:")
                     msg += [f"  - Move VM {vms[vid]['name']} to a different host" for vid in group[1:]]
                     violation_text = "\n".join(msg)
-                    cluster_violations[cluster_name].append(violation_text)
-                    structured_violations.append({
+                    violation_obj = {
                         "type": rule['type'],
                         "rule": rule,
                         "alias": None,
                         "affected_vms": [vms[vid]['name'] for vid in group],
                         "cluster": cluster_name,
                         "violation_text": violation_text
-                    })
+                    }
+                    if violation_is_exception(violation_obj):
+                        continue
+                    cluster_violations[cluster_name].append(violation_text)
+                    structured_violations.append(violation_obj)
 
     # Dataset affinity rules
     processed_vms = set()
@@ -209,15 +226,18 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                                 f"  - Move VM {vm['name']} to a datastore containing one of: {patterns}"
                             ]
                             violation_text = "\n".join(msg)
-                            cluster_violations[cluster_name].append(violation_text)
-                            structured_violations.append({
+                            violation_obj = {
                                 "type": rule['type'],
                                 "rule": rule,
                                 "alias": alias,
                                 "affected_vms": [vm['name']],
                                 "cluster": cluster_name,
                                 "violation_text": violation_text
-                            })
+                            }
+                            if violation_is_exception(violation_obj):
+                                continue
+                            cluster_violations[cluster_name].append(violation_text)
+                            structured_violations.append(violation_obj)
                         processed_vms.add(vm_id)
             # Name-pattern-based
             if 'name_pattern' in rule:
@@ -242,15 +262,18 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                                 f"  - Move VM {vm['name']} to a datastore containing one of: {patterns}"
                             ]
                             violation_text = "\n".join(msg)
-                            cluster_violations[cluster_name].append(violation_text)
-                            structured_violations.append({
+                            violation_obj = {
                                 "type": rule['type'],
                                 "rule": rule,
                                 "alias": alias,
                                 "affected_vms": [vm['name']],
                                 "cluster": cluster_name,
                                 "violation_text": violation_text
-                            })
+                            }
+                            if violation_is_exception(violation_obj):
+                                continue
+                            cluster_violations[cluster_name].append(violation_text)
+                            structured_violations.append(violation_obj)
                         processed_vms.add(vm_id)
 
     # Print violations grouped by cluster
@@ -263,6 +286,7 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
             print("\n" + "-" * 30)
 
     if return_structured:
+        db.close()
         return structured_violations
 
 if __name__ == "__main__":
