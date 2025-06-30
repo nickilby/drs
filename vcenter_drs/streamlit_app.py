@@ -2,7 +2,7 @@ import streamlit as st
 import sys
 import os
 from api.collect_and_store_metrics import main as collect_and_store_metrics_main
-from rules.rules_engine import evaluate_rules, get_db_state
+from rules.rules_engine import evaluate_rules, get_db_state, load_rules, parse_alias_and_role
 import time
 import threading
 from collections import defaultdict
@@ -91,7 +91,7 @@ if st.button("Refresh Data from vCenter"):
     st.success("Data refreshed from vCenter!")
 
 # Add sidebar navigation
-page = st.sidebar.radio("Navigation", ["Compliance Dashboard", "Exception Management", "Rule Management"])
+page = st.sidebar.radio("Navigation", ["Compliance Dashboard", "Exception Management", "Rule Management", "VM Rule Validator"])
 
 if page == "Compliance Dashboard":
     if 'violations' not in st.session_state:
@@ -223,4 +223,110 @@ elif page == "Rule Management":
             with open(rules_path, 'w') as f:
                 json.dump(rules, f, indent=2)
             st.success("New rule added. Please refresh the page.")
-            st.stop() 
+            st.stop()
+
+elif page == "VM Rule Validator":
+    st.title("VM Rule Validator")
+    st.write("Enter a VM name, select a host and dataset, and see which rules would apply and if the placement would be compliant.")
+    rules = load_rules()
+    clusters, hosts, vms = get_db_state()
+    host_names = [h['name'] for h in hosts.values()]
+    dataset_names = set(v['dataset_name'] for v in vms.values() if v['dataset_name'])
+    dataset_names = sorted(list(dataset_names))
+
+    with st.form("vm_rule_validator_form"):
+        vm_name = st.text_input("VM Name", "z-example-alias-LB1")
+        host = st.selectbox("Host", host_names)
+        dataset = st.selectbox("Dataset", dataset_names)
+        submitted = st.form_submit_button("Validate")
+
+    if submitted:
+        alias, role = parse_alias_and_role(vm_name)
+        st.write(f"**Alias:** {alias}")
+        st.write(f"**Role:** {role}")
+        st.write(f"**Host:** {host}")
+        st.write(f"**Dataset:** {dataset}")
+        # Simulate VM dict
+        vm = {'name': vm_name, 'host_id': None, 'dataset_name': dataset}
+        # Find host_id and cluster
+        host_id = None
+        cluster_id = None
+        for hid, h in hosts.items():
+            if h['name'] == host:
+                host_id = hid
+                cluster_id = h['cluster_id']
+                break
+        if not host_id:
+            st.error("Host not found in DB.")
+        else:
+            cluster_name = clusters[cluster_id]
+            st.write(f"**Cluster:** {cluster_name}")
+            # Check which rules would apply
+            applicable_rules = []
+            violations = []
+            for rule in rules:
+                applies = False
+                violation = None
+                # Affinity/anti-affinity
+                if rule['type'] in ['affinity', 'anti-affinity']:
+                    if 'role' in rule:
+                        rule_roles = [rule['role']] if isinstance(rule['role'], str) else rule['role']
+                        if role in [r.upper() for r in rule_roles]:
+                            applies = True
+                            # Simulate: for anti-affinity, if another VM with same alias+role is on the same host, would violate
+                            if rule['type'] == 'anti-affinity' and rule.get('level') == 'host':
+                                for v in vms.values():
+                                    a2, r2 = parse_alias_and_role(v['name'])
+                                    if a2 == alias and r2 == role and v['host_id'] == host_id:
+                                        violation = f"Would violate anti-affinity: another {role} VM with alias {alias} is already on host {host}."
+                            if rule['type'] == 'affinity' and rule.get('level') == 'host':
+                                # If other VMs with same alias+role are on different hosts, would violate
+                                other_hosts = set(v['host_id'] for v in vms.values() if parse_alias_and_role(v['name']) == (alias, role))
+                                if other_hosts and host_id not in other_hosts:
+                                    violation = f"Would violate affinity: other {role} VMs with alias {alias} are on different hosts."
+                # Dataset affinity/anti-affinity
+                if rule['type'] in ['dataset-affinity', 'dataset-anti-affinity']:
+                    patterns = rule.get('dataset_pattern', [])
+                    # Role-based
+                    if 'role' in rule:
+                        rule_roles = [rule['role']] if isinstance(rule['role'], str) else rule['role']
+                        if role in [r.upper() for r in rule_roles]:
+                            applies = True
+                            if rule['type'] == 'dataset-affinity':
+                                if not any(pat in dataset for pat in patterns):
+                                    violation = f"Would violate dataset-affinity: dataset {dataset} does not match {patterns}."
+                            if rule['type'] == 'dataset-anti-affinity':
+                                # If another matching VM is on the same dataset, would violate
+                                for v in vms.values():
+                                    a2, r2 = parse_alias_and_role(v['name'])
+                                    if a2 == alias and r2 == role and v['dataset_name'] == dataset:
+                                        violation = f"Would violate dataset-anti-affinity: another {role} VM with alias {alias} is already on dataset {dataset}."
+                    # Name-pattern-based
+                    if 'name_pattern' in rule:
+                        if rule['name_pattern'] in vm_name:
+                            applies = True
+                            if rule['type'] == 'dataset-affinity':
+                                if not any(pat in dataset for pat in patterns):
+                                    violation = f"Would violate dataset-affinity: dataset {dataset} does not match {patterns}."
+                            if rule['type'] == 'dataset-anti-affinity':
+                                for v in vms.values():
+                                    if rule['name_pattern'] in v['name'] and v['dataset_name'] == dataset:
+                                        violation = f"Would violate dataset-anti-affinity: another VM with name pattern {rule['name_pattern']} is already on dataset {dataset}."
+                if applies:
+                    applicable_rules.append(rule)
+                    if violation:
+                        violations.append((rule, violation))
+            st.markdown("---")
+            st.subheader("Applicable Rules:")
+            if not applicable_rules:
+                st.info("No rules would apply to this VM.")
+            else:
+                for rule in applicable_rules:
+                    st.json(rule)
+            st.markdown("---")
+            st.subheader("Potential Violations:")
+            if not violations:
+                st.success("This VM would be compliant with all applicable rules for the selected placement.")
+            else:
+                for rule, vtext in violations:
+                    st.error(vtext) 
