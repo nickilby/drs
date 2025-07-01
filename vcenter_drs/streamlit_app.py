@@ -8,8 +8,69 @@ import threading
 from collections import defaultdict
 from db.metrics_db import MetricsDB
 import json
+from prometheus_client import start_http_server, Gauge, Counter, Histogram
+import atexit
 
 st.set_page_config(page_title="vCenter DRS Compliance Dashboard", layout="wide")
+
+# Prometheus Metrics Setup
+# Start metrics server in background thread
+def start_metrics_server():
+    try:
+        start_http_server(8081)
+        print("Prometheus metrics server started on port 8081")
+    except Exception as e:
+        print(f"Failed to start metrics server: {e}")
+
+# Initialize metrics only once
+if not hasattr(st.session_state, 'metrics_initialized'):
+    # Start metrics server if not already running
+    if not hasattr(st.session_state, 'metrics_server_started'):
+        metrics_thread = threading.Thread(target=start_metrics_server, daemon=True)
+        metrics_thread.start()
+        st.session_state.metrics_server_started = True
+
+    # Define Prometheus metrics
+    st.session_state.SERVICE_UP = Gauge('vcenter_drs_service_up', 'Service status (1=up, 0=down)')
+    st.session_state.RULE_VIOLATIONS = Counter('vcenter_drs_rule_violations_total', 'Total rule violations by type', ['rule_type'])
+    st.session_state.VM_COUNT = Gauge('vcenter_drs_vm_count', 'Total number of VMs monitored')
+    st.session_state.HOST_COUNT = Gauge('vcenter_drs_host_count', 'Total number of hosts monitored')
+    st.session_state.LAST_COLLECTION_TIME = Gauge('vcenter_drs_last_collection_timestamp', 'Timestamp of last metrics collection')
+    st.session_state.COMPLIANCE_CHECK_DURATION = Histogram('vcenter_drs_compliance_check_duration_seconds', 'Duration of compliance checks')
+    st.session_state.UPTIME = Gauge('vcenter_drs_uptime_seconds', 'Service uptime in seconds')
+
+    # Set service as up
+    st.session_state.SERVICE_UP.set(1)
+    st.session_state.start_time = time.time()
+
+    # Update uptime periodically
+    def update_uptime():
+        while True:
+            st.session_state.UPTIME.set(time.time() - st.session_state.start_time)
+            time.sleep(60)  # Update every minute
+
+    uptime_thread = threading.Thread(target=update_uptime, daemon=True)
+    uptime_thread.start()
+    
+    st.session_state.metrics_initialized = True
+
+# Get metrics from session state
+SERVICE_UP = st.session_state.SERVICE_UP
+RULE_VIOLATIONS = st.session_state.RULE_VIOLATIONS
+VM_COUNT = st.session_state.VM_COUNT
+HOST_COUNT = st.session_state.HOST_COUNT
+LAST_COLLECTION_TIME = st.session_state.LAST_COLLECTION_TIME
+COMPLIANCE_CHECK_DURATION = st.session_state.COMPLIANCE_CHECK_DURATION
+UPTIME = st.session_state.UPTIME
+start_time = st.session_state.start_time
+
+# Cleanup function for graceful shutdown
+def cleanup():
+    if hasattr(st.session_state, 'SERVICE_UP'):
+        st.session_state.SERVICE_UP.set(0)
+    print("vCenter DRS service shutting down...")
+
+atexit.register(cleanup)
 
 st.title("vCenter DRS Compliance Dashboard")
 
@@ -68,6 +129,18 @@ def timed_data_collection():
     collect_and_store_metrics_main()
     end = time.time()
     duration = end - start
+    
+    # Update Prometheus metrics
+    LAST_COLLECTION_TIME.set(end)
+    
+    # Update VM and host counts
+    try:
+        clusters, hosts, vms = get_db_state()
+        VM_COUNT.set(len(vms))
+        HOST_COUNT.set(len(hosts))
+    except Exception as e:
+        print(f"Failed to update VM/Host counts: {e}")
+    
     with open("last_collection_time.txt", "w") as f:
         f.write(str(duration))
     return duration
@@ -98,8 +171,22 @@ if page == "Compliance Dashboard":
         st.session_state['violations'] = None
 
     if st.button("Run Compliance Check"):
-        # Use the new structured output
+        # Use the new structured output with timing
+        start_time = time.time()
         structured_violations = evaluate_rules(selected_cluster if selected_cluster != "All Clusters" else None, return_structured=True)
+        end_time = time.time()
+        
+        # Record compliance check duration
+        COMPLIANCE_CHECK_DURATION.observe(end_time - start_time)
+        
+        # Update violation metrics
+        if structured_violations:
+            violation_counts = defaultdict(int)
+            for violation in structured_violations:
+                rule_type = violation.get('type', 'unknown')
+                violation_counts[rule_type] += 1
+                RULE_VIOLATIONS.labels(rule_type=rule_type).inc()
+        
         st.session_state['violations'] = structured_violations
         if not structured_violations:
             st.success("✅ All VMs in this cluster are compliant! No violations found.")
