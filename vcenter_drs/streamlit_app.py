@@ -61,6 +61,11 @@ except ValueError:
 SERVICE_UP.set(1)
 start_time = time.time()
 
+# Initialize violation metrics with 0 values to ensure they're always present
+known_rule_types = ['anti-affinity', 'dataset-affinity', 'affinity']
+for rule_type in known_rule_types:
+    RULE_VIOLATIONS.labels(rule_type=rule_type).set(0)
+
 # Update uptime periodically
 def update_uptime():
     while True:
@@ -188,18 +193,20 @@ if page == "Compliance Dashboard":
         COMPLIANCE_CHECK_DURATION.observe(end_time - start_time)
         
         # Update violation metrics
+        violation_counts = defaultdict(int)
         if structured_violations:
-            violation_counts = defaultdict(int)
             for violation in structured_violations:
                 rule_type = violation.get('type', 'unknown')
                 violation_counts[rule_type] += 1
-            
-            # Set current violation counts (reset all to 0 first, then set current values)
-            for rule_type in RULE_VIOLATIONS._metrics:
-                RULE_VIOLATIONS.labels(rule_type=rule_type).set(0)
-            
-            for rule_type, count in violation_counts.items():
-                RULE_VIOLATIONS.labels(rule_type=rule_type).set(count)
+        
+        # Always ensure metrics exist by setting all known rule types to 0 first
+        known_rule_types = ['anti-affinity', 'dataset-affinity', 'affinity']
+        for rule_type in known_rule_types:
+            RULE_VIOLATIONS.labels(rule_type=rule_type).set(0)
+        
+        # Then set the actual counts
+        for rule_type, count in violation_counts.items():
+            RULE_VIOLATIONS.labels(rule_type=rule_type).set(count)
         
         st.session_state['violations'] = structured_violations
         if not structured_violations:
