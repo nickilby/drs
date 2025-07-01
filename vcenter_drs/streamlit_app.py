@@ -8,7 +8,7 @@ import threading
 from collections import defaultdict
 from db.metrics_db import MetricsDB
 import json
-from prometheus_client import start_http_server, Gauge, Counter, Histogram
+from prometheus_client import start_http_server, Gauge, Counter, Histogram, REGISTRY
 import atexit
 
 st.set_page_config(page_title="vCenter DRS Compliance Dashboard", layout="wide")
@@ -23,51 +23,59 @@ def start_metrics_server():
         print(f"Failed to start metrics server: {e}")
 
 # Initialize metrics only once
-if not hasattr(st.session_state, 'metrics_initialized'):
-    # Start metrics server if not already running
-    if not hasattr(st.session_state, 'metrics_server_started'):
-        metrics_thread = threading.Thread(target=start_metrics_server, daemon=True)
-        metrics_thread.start()
-        st.session_state.metrics_server_started = True
+def get_or_create_metric(metric_type, name, description, *args, **kwargs):
+    """Get existing metric or create new one to avoid duplicates"""
+    try:
+        # Try to get existing metric
+        return REGISTRY.get_sample_value(name)
+    except:
+        # Create new metric if it doesn't exist
+        return metric_type(name, description, *args, **kwargs)
 
-    # Define Prometheus metrics
-    st.session_state.SERVICE_UP = Gauge('vcenter_drs_service_up', 'Service status (1=up, 0=down)')
-    st.session_state.RULE_VIOLATIONS = Counter('vcenter_drs_rule_violations_total', 'Total rule violations by type', ['rule_type'])
-    st.session_state.VM_COUNT = Gauge('vcenter_drs_vm_count', 'Total number of VMs monitored')
-    st.session_state.HOST_COUNT = Gauge('vcenter_drs_host_count', 'Total number of hosts monitored')
-    st.session_state.LAST_COLLECTION_TIME = Gauge('vcenter_drs_last_collection_timestamp', 'Timestamp of last metrics collection')
-    st.session_state.COMPLIANCE_CHECK_DURATION = Histogram('vcenter_drs_compliance_check_duration_seconds', 'Duration of compliance checks')
-    st.session_state.UPTIME = Gauge('vcenter_drs_uptime_seconds', 'Service uptime in seconds')
+# Start metrics server if not already running
+if not hasattr(st.session_state, 'metrics_server_started'):
+    metrics_thread = threading.Thread(target=start_metrics_server, daemon=True)
+    metrics_thread.start()
+    st.session_state.metrics_server_started = True
 
-    # Set service as up
-    st.session_state.SERVICE_UP.set(1)
-    st.session_state.start_time = time.time()
+# Define Prometheus metrics (only create if they don't exist)
+try:
+    SERVICE_UP = Gauge('vcenter_drs_service_up', 'Service status (1=up, 0=down)')
+    RULE_VIOLATIONS = Gauge('vcenter_drs_rule_violations_total', 'Current rule violations by type', ['rule_type'])
+    VM_COUNT = Gauge('vcenter_drs_vm_count', 'Total number of VMs monitored')
+    HOST_COUNT = Gauge('vcenter_drs_host_count', 'Total number of hosts monitored')
+    LAST_COLLECTION_TIME = Gauge('vcenter_drs_last_collection_timestamp', 'Timestamp of last metrics collection')
+    COMPLIANCE_CHECK_DURATION = Histogram('vcenter_drs_compliance_check_duration_seconds', 'Duration of compliance checks')
+    UPTIME = Gauge('vcenter_drs_uptime_seconds', 'Service uptime in seconds')
+except ValueError:
+    # Metrics already exist, get them from registry
+    SERVICE_UP = REGISTRY._names_to_collectors['vcenter_drs_service_up']
+    RULE_VIOLATIONS = REGISTRY._names_to_collectors['vcenter_drs_rule_violations_total']
+    VM_COUNT = REGISTRY._names_to_collectors['vcenter_drs_vm_count']
+    HOST_COUNT = REGISTRY._names_to_collectors['vcenter_drs_host_count']
+    LAST_COLLECTION_TIME = REGISTRY._names_to_collectors['vcenter_drs_last_collection_timestamp']
+    COMPLIANCE_CHECK_DURATION = REGISTRY._names_to_collectors['vcenter_drs_compliance_check_duration_seconds']
+    UPTIME = REGISTRY._names_to_collectors['vcenter_drs_uptime_seconds']
 
-    # Update uptime periodically
-    def update_uptime():
-        while True:
-            st.session_state.UPTIME.set(time.time() - st.session_state.start_time)
-            time.sleep(60)  # Update every minute
+# Set service as up
+SERVICE_UP.set(1)
+start_time = time.time()
 
-    uptime_thread = threading.Thread(target=update_uptime, daemon=True)
-    uptime_thread.start()
-    
-    st.session_state.metrics_initialized = True
+# Update uptime periodically
+def update_uptime():
+    while True:
+        UPTIME.set(time.time() - start_time)
+        time.sleep(60)  # Update every minute
 
-# Get metrics from session state
-SERVICE_UP = st.session_state.SERVICE_UP
-RULE_VIOLATIONS = st.session_state.RULE_VIOLATIONS
-VM_COUNT = st.session_state.VM_COUNT
-HOST_COUNT = st.session_state.HOST_COUNT
-LAST_COLLECTION_TIME = st.session_state.LAST_COLLECTION_TIME
-COMPLIANCE_CHECK_DURATION = st.session_state.COMPLIANCE_CHECK_DURATION
-UPTIME = st.session_state.UPTIME
-start_time = st.session_state.start_time
+uptime_thread = threading.Thread(target=update_uptime, daemon=True)
+uptime_thread.start()
 
 # Cleanup function for graceful shutdown
 def cleanup():
-    if hasattr(st.session_state, 'SERVICE_UP'):
-        st.session_state.SERVICE_UP.set(0)
+    try:
+        SERVICE_UP.set(0)
+    except:
+        pass
     print("vCenter DRS service shutting down...")
 
 atexit.register(cleanup)
@@ -185,7 +193,13 @@ if page == "Compliance Dashboard":
             for violation in structured_violations:
                 rule_type = violation.get('type', 'unknown')
                 violation_counts[rule_type] += 1
-                RULE_VIOLATIONS.labels(rule_type=rule_type).inc()
+            
+            # Set current violation counts (reset all to 0 first, then set current values)
+            for rule_type in RULE_VIOLATIONS._metrics:
+                RULE_VIOLATIONS.labels(rule_type=rule_type).set(0)
+            
+            for rule_type, count in violation_counts.items():
+                RULE_VIOLATIONS.labels(rule_type=rule_type).set(count)
         
         st.session_state['violations'] = structured_violations
         if not structured_violations:
