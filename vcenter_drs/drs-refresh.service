@@ -1,0 +1,8 @@
+[Unit]
+Description=DRS vCenter Data Refresh
+
+[Service]
+WorkingDirectory=/home/headhoncho/drs
+ExecStart=/home/headhoncho/drs/venv/bin/python /home/headhoncho/drs/refresh_vcenter_data.py
+User=headhoncho
+Restart=on-failure 

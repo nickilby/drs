@@ -1,0 +1,8 @@
+[Unit]
+Description=DRS Compliance Check
+
+[Service]
+WorkingDirectory=/home/headhoncho/drs
+ExecStart=/home/headhoncho/drs/venv/bin/python /home/headhoncho/drs/check_compliance.py
+User=headhoncho
+Restart=on-failure 
