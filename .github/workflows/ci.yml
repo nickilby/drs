@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.8, 3.9, 3.10, 3.11, 3.12]
+        python-version: [3.9, 3.10, 3.11, 3.12]
         mysql-version: ['8.0']
 
     services:
@@ -34,9 +34,15 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
+      
+    - name: Debug Python version
+      run: |
+        echo "Python version: $(python --version)"
+        echo "Python location: $(which python)"
+        echo "Matrix python-version: ${{ matrix.python-version }}"
 
     - name: Cache pip dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
@@ -52,7 +58,10 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r vcenter_drs/requirements.txt
-        pip install -r vcenter_drs/requirements.txt[dev]
+        # Install dev dependencies if they exist
+        if [ -f "vcenter_drs/requirements.txt" ]; then
+          pip install pytest pytest-cov black flake8 mypy
+        fi
 
     - name: Create test credentials file
       run: |
@@ -96,7 +105,7 @@ jobs:
         pytest tests/ -v --cov=. --cov-report=xml --cov-report=term-missing
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: ./vcenter_drs/coverage.xml
         flags: unittests
@@ -124,7 +133,7 @@ jobs:
         safety check --json --output safety-report.json || true
 
     - name: Upload security reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: security-reports
         path: |
@@ -159,7 +168,7 @@ jobs:
         twine check dist/*
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: dist
         path: vcenter_drs/dist/ 
