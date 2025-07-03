@@ -108,5 +108,10 @@
     "type": "affinity",
     "level": "host",
     "role": ["SQL", "CMS"]
+  },
+  {
+    "type": "pool-anti-affinity",
+    "role": ["WEB", "LB", "CACHE", "v14-ES", "controller-", "keeper", "etcd-", "request-handler-lb", "utility", "redis", "broker"],
+    "pool_pattern": ["HQ", "L", "M"]
   }
 ] 

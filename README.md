@@ -151,12 +151,19 @@ Edit `vcenter_drs/rules/rules.json` to define compliance rules:
     "type": "anti-affinity",
     "level": "host",
     "role": "CACHE"
+  },
+  {
+    "type": "pool-anti-affinity",
+    "role": ["WEB", "LB", "CACHE"],
+    "pool_pattern": ["HQ", "L", "M"]
   }
 ]
 ```
 
 ### Rule Types
 - **`dataset-affinity`**: Ensures VMs are on specific datastores
+- **`dataset-anti-affinity`**: Prevents VMs from being on the same datastore
+- **`pool-anti-affinity`**: Prevents VMs from being on the same ZFS pool (for resilience)
 - **`affinity`**: Keeps VMs together on same host/cluster
 - **`anti-affinity`**: Prevents VMs from being on same host/cluster
 

@@ -13,9 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Contributing guidelines
 - Security policy
 - Changelog tracking
+- **Pool Anti-Affinity Rules**: New rule type for ZFS pool distribution
+  - Ensures VMs are distributed across different ZFS pools for resilience
+  - Supports role-based and name-pattern-based rules
+  - Automatic pool name extraction from dataset names
+  - Comprehensive documentation and examples
 
 ### Changed
 - Improved project documentation structure
+- Enhanced database schema with pool_name column
+- Updated rules engine to support pool anti-affinity checking
 
 ## [1.0.0] - 2024-01-XX
 

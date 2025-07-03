@@ -31,6 +31,37 @@ def parse_alias_and_role(vm_name):
         return alias.lower(), role.upper()
     return None, None
 
+def extract_pool_from_dataset(dataset_name):
+    """
+    Extract ZFS pool name from dataset name.
+    
+    Generic pattern that handles various pool naming conventions:
+    - HQS1DAT1 -> hqs1
+    - HQS2WEB1 -> hqs2
+    - L1DAT1 -> l1
+    - M1WEB1 -> m1
+    - POOL5DAT1 -> pool5
+    - STORAGE10WEB1 -> storage10
+    
+    Args:
+        dataset_name (str): Dataset name like 'HQS1DAT1'
+        
+    Returns:
+        str: Pool name or None if cannot be extracted
+    """
+    if not dataset_name:
+        return None
+    
+    # Generic pattern: Extract letters followed by numbers
+    # This handles: HQS1, L1, M1, POOL5, STORAGE10, etc.
+    match = re.match(r'^([A-Z]+)([0-9]+)', dataset_name, re.IGNORECASE)
+    if match:
+        letters = match.group(1).lower()
+        numbers = match.group(2)
+        return f"{letters}{numbers}"
+    
+    return None
+
 def get_db_state():
     db = MetricsDB()
     db.connect()
@@ -285,6 +316,91 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                             cluster_violations[cluster_name].append(violation_text)
                             structured_violations.append(violation_obj)
                         processed_vms.add(vm_id)
+
+    # Pool anti-affinity rules (new rule type for ZFS pool distribution)
+    for rule in rules:
+        if rule.get('type') == 'pool-anti-affinity' and 'pool_pattern' in rule:
+            patterns = rule['pool_pattern']
+            # Role-based pool anti-affinity
+            if 'role' in rule:
+                role = rule['role'].upper() if isinstance(rule['role'], str) else [r.upper() for r in rule['role']]
+                # Group VMs by pool
+                pool_groups = defaultdict(list)
+                for vm_id, vm in vms.items():
+                    alias, vm_role = vm_alias_role[vm_id]
+                    dataset_name = vm.get('dataset_name') or ''
+                    # Extract pool name from dataset (assuming format like HQS5WEB1, HQS5DAT1 where HQS5 is the pool)
+                    pool_name = extract_pool_from_dataset(dataset_name)
+                    if ((isinstance(role, str) and vm_role == role) or (isinstance(role, list) and vm_role in role)) and pool_name and any(pat in pool_name for pat in patterns):
+                        pool_groups[pool_name].append((vm_id, vm))
+                for pool, group in pool_groups.items():
+                    if len(group) > 1:
+                        # Violation: more than one matching VM on the same pool
+                        cluster_ids = set(hosts[vm['host_id']]['cluster_id'] for vm_id, vm in group)
+                        for cluster_id in cluster_ids:
+                            cluster_name = clusters[cluster_id]
+                            vms_on_pool = [vm['name'] for vm_id, vm in group if hosts[vm['host_id']]['cluster_id'] == cluster_id]
+                            msg = [
+                                "Pool Anti-Affinity Violation",
+                                f"Rule: VMs with role(s) {role} must NOT be on the same ZFS pool matching {patterns}",
+                                f"Pool: {pool}",
+                                "VMs on this pool:",
+                            ]
+                            msg += [f"  - {name}" for name in vms_on_pool]
+                            msg.append("Suggestions:")
+                            msg += [f"  - Move VM {name} to a different ZFS pool" for name in vms_on_pool[1:]]
+                            violation_text = "\n".join(msg)
+                            violation_obj = {
+                                "type": rule['type'],
+                                "rule": rule,
+                                "alias": None,
+                                "affected_vms": vms_on_pool,
+                                "cluster": cluster_name,
+                                "violation_text": violation_text
+                            }
+                            if violation_is_exception(violation_obj):
+                                continue
+                            cluster_violations[cluster_name].append(violation_text)
+                            structured_violations.append(violation_obj)
+            # Name-pattern-based pool anti-affinity
+            if 'name_pattern' in rule:
+                name_pattern = rule['name_pattern']
+                pool_groups = defaultdict(list)
+                for vm_id, vm in vms.items():
+                    if name_pattern in vm['name']:
+                        alias, vm_role = vm_alias_role[vm_id]
+                        dataset_name = vm.get('dataset_name') or ''
+                        pool_name = extract_pool_from_dataset(dataset_name)
+                        if pool_name and any(pat in pool_name for pat in patterns):
+                            pool_groups[pool_name].append((vm_id, vm))
+                for pool, group in pool_groups.items():
+                    if len(group) > 1:
+                        cluster_ids = set(hosts[vm['host_id']]['cluster_id'] for vm_id, vm in group)
+                        for cluster_id in cluster_ids:
+                            cluster_name = clusters[cluster_id]
+                            vms_on_pool = [vm['name'] for vm_id, vm in group if hosts[vm['host_id']]['cluster_id'] == cluster_id]
+                            msg = [
+                                "Pool Anti-Affinity Violation",
+                                f"Rule: VMs with name containing '{name_pattern}' must NOT be on the same ZFS pool matching {patterns}",
+                                f"Pool: {pool}",
+                                "VMs on this pool:",
+                            ]
+                            msg += [f"  - {name}" for name in vms_on_pool]
+                            msg.append("Suggestions:")
+                            msg += [f"  - Move VM {name} to a different ZFS pool" for name in vms_on_pool[1:]]
+                            violation_text = "\n".join(msg)
+                            violation_obj = {
+                                "type": rule['type'],
+                                "rule": rule,
+                                "alias": None,
+                                "affected_vms": vms_on_pool,
+                                "cluster": cluster_name,
+                                "violation_text": violation_text
+                            }
+                            if violation_is_exception(violation_obj):
+                                continue
+                            cluster_violations[cluster_name].append(violation_text)
+                            structured_violations.append(violation_obj)
 
     # Dataset anti-affinity rules
     for rule in rules:

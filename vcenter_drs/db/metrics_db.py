@@ -171,7 +171,9 @@ class MetricsDB:
                 CREATE TABLE IF NOT EXISTS datasets (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     name VARCHAR(255) UNIQUE,
-                    description TEXT
+                    pool_name VARCHAR(255),
+                    description TEXT,
+                    INDEX idx_pool (pool_name)
                 ) ENGINE=InnoDB;
             ''')
             

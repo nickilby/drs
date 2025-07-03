@@ -311,11 +311,12 @@ elif page == "Rule Management":
     st.header("Add New Rule")
     # Simple form for adding a new rule
     with st.form("add_rule_form"):
-        rule_type = st.selectbox("Type", ["affinity", "anti-affinity", "dataset-affinity"])
+        rule_type = st.selectbox("Type", ["affinity", "anti-affinity", "dataset-affinity", "dataset-anti-affinity", "pool-anti-affinity"])
         level = st.selectbox("Level", ["host", "cluster", "(none)"])
         role = st.text_input("Role (comma-separated for multiple, leave blank if using name_pattern)")
         name_pattern = st.text_input("Name Pattern (optional)")
-        dataset_pattern = st.text_input("Dataset Pattern (comma-separated, for dataset-affinity only)")
+        dataset_pattern = st.text_input("Dataset Pattern (comma-separated, for dataset-affinity/dataset-anti-affinity only)")
+        pool_pattern = st.text_input("Pool Pattern (comma-separated, for pool-anti-affinity only)")
         submitted = st.form_submit_button("Add Rule")
         if submitted:
             new_rule: Dict[str, Any] = {"type": rule_type}
@@ -329,6 +330,9 @@ elif page == "Rule Management":
             if dataset_pattern:
                 patterns = [p.strip() for p in dataset_pattern.split(",") if p.strip()]
                 new_rule["dataset_pattern"] = patterns
+            if pool_pattern:
+                patterns = [p.strip() for p in pool_pattern.split(",") if p.strip()]
+                new_rule["pool_pattern"] = patterns
             rules.append(new_rule)
             with open(rules_path, 'w') as f:
                 json.dump(rules, f, indent=2)
@@ -422,6 +426,35 @@ elif page == "VM Rule Validator":
                                 for v in vms.values():
                                     if rule['name_pattern'] in v['name'] and v['dataset_name'] == dataset:
                                         violation = f"Would violate dataset-anti-affinity: another VM with name pattern {rule['name_pattern']} is already on dataset {dataset}."
+                
+                # Pool anti-affinity
+                if rule['type'] == 'pool-anti-affinity':
+                    from vcenter_drs.rules.rules_engine import extract_pool_from_dataset
+                    pool_patterns = rule.get('pool_pattern', [])
+                    current_pool = extract_pool_from_dataset(dataset)
+                    
+                    # Role-based
+                    if 'role' in rule:
+                        rule_roles = [rule['role']] if isinstance(rule['role'], str) else rule['role']
+                        if role in [r.upper() for r in rule_roles]:
+                            applies = True
+                            if current_pool and any(pat.lower() in current_pool.lower() for pat in pool_patterns):
+                                # Check if another matching VM is on the same pool
+                                for v in vms.values():
+                                    a2, r2 = parse_alias_and_role(v['name'])
+                                    v_pool = extract_pool_from_dataset(v['dataset_name'])
+                                    if a2 == alias and r2 == role and v_pool == current_pool:
+                                        violation = f"Would violate pool-anti-affinity: another {role} VM with alias {alias} is already on pool {current_pool}."
+                    # Name-pattern-based
+                    if 'name_pattern' in rule:
+                        if rule['name_pattern'] in vm_name:
+                            applies = True
+                            if current_pool and any(pat.lower() in current_pool.lower() for pat in pool_patterns):
+                                # Check if another matching VM is on the same pool
+                                for v in vms.values():
+                                    v_pool = extract_pool_from_dataset(v['dataset_name'])
+                                    if rule['name_pattern'] in v['name'] and v_pool == current_pool:
+                                        violation = f"Would violate pool-anti-affinity: another VM with name pattern {rule['name_pattern']} is already on pool {current_pool}."
                 if applies:
                     applicable_rules.append(rule)
                     if violation:
