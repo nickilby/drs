@@ -87,10 +87,11 @@ class MetricsDB:
         env_password = os.getenv("DB_PASSWORD")
         env_database = os.getenv("DB_DATABASE")
         if all([env_host, env_user, env_password, env_database]):
-            self.host = env_host
-            self.user = env_user
-            self.password = env_password
-            self.database = env_database
+            # At this point, we know all values are not None due to the all() check
+            self.host = env_host  # type: ignore
+            self.user = env_user  # type: ignore
+            self.password = env_password  # type: ignore
+            self.database = env_database  # type: ignore
             return
         # fallback to file
         if not os.path.exists(self.credentials_path):
