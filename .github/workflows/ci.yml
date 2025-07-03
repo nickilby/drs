@@ -1,0 +1,165 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8, 3.9, 3.10, 3.11, 3.12]
+        mysql-version: ['8.0']
+
+    services:
+      mysql:
+        image: mysql:${{ matrix.mysql-version }}
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: vcenter_drs_test
+          MYSQL_USER: test_user
+          MYSQL_PASSWORD: test_password
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-${{ matrix.python-version }}-
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y default-mysql-client
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r vcenter_drs/requirements.txt
+        pip install -r vcenter_drs/requirements.txt[dev]
+
+    - name: Create test credentials file
+      run: |
+        mkdir -p vcenter_drs
+        cat > vcenter_drs/credentials.json << EOF
+        {
+          "host": "test-vcenter.example.com",
+          "username": "test_user",
+          "password": "test_password",
+          "db_host": "127.0.0.1",
+          "db_user": "test_user",
+          "db_password": "test_password",
+          "db_database": "vcenter_drs_test"
+        }
+        EOF
+
+    - name: Initialize test database
+      run: |
+        mysql -h 127.0.0.1 -u test_user -ptest_password vcenter_drs_test -e "SELECT 1;" || true
+        python -c "
+        from vcenter_drs.db.metrics_db import MetricsDB
+        db = MetricsDB()
+        db.connect()
+        db.init_schema()
+        db.close()
+        print('Database schema initialized successfully')
+        "
+
+    - name: Run linting
+      run: |
+        flake8 vcenter_drs/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 vcenter_drs/ --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
+
+    - name: Run type checking
+      run: |
+        mypy vcenter_drs/ --ignore-missing-imports
+
+    - name: Run unit tests
+      run: |
+        cd vcenter_drs
+        pytest tests/ -v --cov=. --cov-report=xml --cov-report=term-missing
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./vcenter_drs/coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit safety
+
+    - name: Run security checks
+      run: |
+        bandit -r vcenter_drs/ -f json -o bandit-report.json || true
+        safety check --json --output safety-report.json || true
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          safety-report.json
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+
+    - name: Build package
+      run: |
+        cd vcenter_drs
+        python -m build
+
+    - name: Check package
+      run: |
+        cd vcenter_drs
+        twine check dist/*
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: dist
+        path: vcenter_drs/dist/ 
