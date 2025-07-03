@@ -77,13 +77,26 @@ class MetricsDB:
         self.conn: Optional[Union[MySQLConnection, PooledMySQLConnection, MySQLConnectionAbstract]] = None
 
     def _load_credentials(self) -> None:
-        """Load database credentials from JSON file."""
+        """
+        Load database credentials from environment variables if present, otherwise from JSON file.
+        Environment variables checked: DB_HOST, DB_USER, DB_PASSWORD, DB_DATABASE
+        """
+        import os
+        env_host = os.getenv("DB_HOST")
+        env_user = os.getenv("DB_USER")
+        env_password = os.getenv("DB_PASSWORD")
+        env_database = os.getenv("DB_DATABASE")
+        if all([env_host, env_user, env_password, env_database]):
+            self.host = env_host
+            self.user = env_user
+            self.password = env_password
+            self.database = env_database
+            return
+        # fallback to file
         if not os.path.exists(self.credentials_path):
             raise FileNotFoundError(f"Credentials file not found: {self.credentials_path}")
-        
         with open(self.credentials_path, 'r') as f:
             creds: Dict[str, str] = json.load(f)
-        
         self.host = creds['db_host']
         self.user = creds['db_user']
         self.password = creds['db_password']
