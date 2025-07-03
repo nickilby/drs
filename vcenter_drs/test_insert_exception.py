@@ -1,4 +1,4 @@
-from db.metrics_db import MetricsDB
+from vcenter_drs.db.metrics_db import MetricsDB
 
 test_exception = {
     'rule_type': 'affinity',

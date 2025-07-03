@@ -98,13 +98,12 @@ jobs:
         DB_PASSWORD: test_password
         DB_DATABASE: vcenter_drs_test
       run: |
-        cd vcenter_drs
-        pytest tests/ -v --cov=. --cov-report=xml --cov-report=term-missing
+        pytest vcenter_drs/tests/ -v --cov=vcenter_drs --cov-report=xml --cov-report=term-missing
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
       with:
-        file: ./vcenter_drs/coverage.xml
+        file: ./coverage.xml
         flags: unittests
         name: codecov-umbrella
 

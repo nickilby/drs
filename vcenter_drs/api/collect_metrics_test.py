@@ -1,4 +1,4 @@
-from api.vcenter_client_pyvomi import VCenterPyVmomiClient
+from vcenter_drs.api.vcenter_client_pyvomi import VCenterPyVmomiClient
 from pyVmomi import vim
 import time
 

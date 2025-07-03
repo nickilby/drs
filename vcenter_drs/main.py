@@ -16,8 +16,8 @@ import time
 import argparse
 from typing import Optional
 
-from api.vcenter_client_pyvomi import VCenterPyVmomiClient
-from api.collect_and_store_metrics import main as collect_and_store_metrics_main
+from vcenter_drs.api.vcenter_client_pyvomi import VCenterPyVmomiClient
+from vcenter_drs.api.collect_and_store_metrics import main as collect_and_store_metrics_main
 from logging_config import setup_logging, get_logger
 from config import config
 from exceptions import VCenterConnectionError, ConfigurationError

@@ -2,12 +2,12 @@ import streamlit as st
 import sys
 import os
 from typing import Dict, Any
-from api.collect_and_store_metrics import main as collect_and_store_metrics_main
-from rules.rules_engine import evaluate_rules, get_db_state, load_rules, parse_alias_and_role
+from vcenter_drs.api.collect_and_store_metrics import main as collect_and_store_metrics_main
+from vcenter_drs.rules.rules_engine import evaluate_rules, get_db_state, load_rules, parse_alias_and_role
 import time
 import threading
 from collections import defaultdict
-from db.metrics_db import MetricsDB
+from vcenter_drs.db.metrics_db import MetricsDB
 import json
 from prometheus_client import start_http_server, Gauge, Counter, Histogram, REGISTRY
 import atexit
