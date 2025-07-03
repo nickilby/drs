@@ -221,11 +221,24 @@ mypy vcenter_drs/
 
 ## 🤝 Contributing
 
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details on how to get started.
+
+### Quick Start for Contributors
+
 1. Fork the repository
-2. Create a feature branch
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
 4. Add tests if applicable
-5. Submit a pull request
+5. Ensure all tests pass (`pytest`)
+6. Submit a pull request using our [PR template](.github/pull_request_template.md)
+
+### Code of Conduct
+
+This project adheres to our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
+
+### Reporting Issues
+
+Please use our [issue template](.github/ISSUE_TEMPLATE/issue_template.md) when reporting bugs or requesting features.
 
 ## 📝 License
 
@@ -236,10 +249,18 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 For issues and questions:
 1. Check the documentation
 2. Review existing issues
-3. Create a new issue with detailed information
+3. Create a new issue using our [issue template](.github/ISSUE_TEMPLATE/issue_template.md)
+
+### Security Issues
+
+If you discover a security vulnerability, please see our [Security Policy](SECURITY.md) for reporting guidelines. **Do not** create a public issue for security vulnerabilities.
 
 ## 📚 Additional Documentation
 
+- [Contributing Guidelines](CONTRIBUTING.md) - How to contribute to the project
+- [Code of Conduct](CODE_OF_CONDUCT.md) - Community guidelines
+- [Security Policy](SECURITY.md) - Security vulnerability reporting
+- [Changelog](CHANGELOG.md) - Version history and changes
 - [Prometheus Metrics Documentation](PROMETHEUS_METRICS.md)
 - [Deployment Guide](deploy.sh)
 - [Cron Setup Guide](setup_cron.sh)
