@@ -91,16 +91,22 @@ class ConfigManager:
         else:
             self._config = {}
         
-        # Override with environment variables
-        self._config.update({
-            'host': os.getenv('VCENTER_HOST', self._config.get('host')),
-            'username': os.getenv('VCENTER_USERNAME', self._config.get('username')),
-            'password': os.getenv('VCENTER_PASSWORD', self._config.get('password')),
-            'db_host': os.getenv('DB_HOST', self._config.get('db_host')),
-            'db_user': os.getenv('DB_USER', self._config.get('db_user')),
-            'db_password': os.getenv('DB_PASSWORD', self._config.get('db_password')),
-            'db_database': os.getenv('DB_DATABASE', self._config.get('db_database')),
-        })
+        # Override with environment variables (only if they are set and not empty)
+        env_overrides = {}
+        for env_var, config_key in [
+            ('VCENTER_HOST', 'host'),
+            ('VCENTER_USERNAME', 'username'),
+            ('VCENTER_PASSWORD', 'password'),
+            ('DB_HOST', 'db_host'),
+            ('DB_USER', 'db_user'),
+            ('DB_PASSWORD', 'db_password'),
+            ('DB_DATABASE', 'db_database'),
+        ]:
+            env_value = os.getenv(env_var)
+            if env_value is not None and env_value.strip():  # Only override if env var is set and not empty
+                env_overrides[config_key] = env_value
+        
+        self._config.update(env_overrides)
     
     @property
     def vcenter(self) -> VCenterConfig:
