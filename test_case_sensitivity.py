@@ -12,9 +12,9 @@ def test_pool_extraction():
     
     test_datasets = [
         "HQS1WEB1",
-        "HQS2DAT1", 
-        "L1WEB1",
-        "M1DAT1"
+        "HQ2S2DAT1", 
+        "L1S1WEB1",
+        "M1S4DAT1"
     ]
     
     for dataset in test_datasets:
