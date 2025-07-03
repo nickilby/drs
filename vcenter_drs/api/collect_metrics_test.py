@@ -25,11 +25,15 @@ if __name__ == "__main__":
     client = VCenterPyVmomiClient()
     si = client.connect()
     content = si.RetrieveContent()
-    perf_manager = content.perfManager
+    if content is None:
+        print("Failed to retrieve content from vCenter")
+        client.disconnect()
+        exit(1)
+    perf_manager = content.perfManager  # type: ignore
 
     # Get first VM
     vm = None
-    for dc in content.rootFolder.childEntity:
+    for dc in content.rootFolder.childEntity:  # type: ignore
         if hasattr(dc, 'vmFolder'):
             vms = dc.vmFolder.childEntity
             if vms:
@@ -46,7 +50,7 @@ if __name__ == "__main__":
 
     # Get first Host
     host = None
-    for dc in content.rootFolder.childEntity:
+    for dc in content.rootFolder.childEntity:  # type: ignore
         if hasattr(dc, 'hostFolder'):
             hosts = dc.hostFolder.childEntity
             for c in hosts:

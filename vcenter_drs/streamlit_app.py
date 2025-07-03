@@ -283,8 +283,9 @@ elif page == "Exception Management":
                 if st.button(f"Remove Exception {exc['id']}", key=f"remove_exc_{exc['id']}"):
                     db = MetricsDB()
                     db.connect()
-                    db.conn.cursor().execute('DELETE FROM exceptions WHERE id = %s', (exc['id'],))
-                    db.conn.commit()
+                    if db.conn:
+                        db.conn.cursor().execute('DELETE FROM exceptions WHERE id = %s', (exc['id'],))
+                        db.conn.commit()
                     db.close()
                     st.success("Exception removed. Please refresh the page.")
 
