@@ -21,6 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: System :: Monitoring",
     "Topic :: System :: Systems Administration",
 ]
@@ -29,9 +30,11 @@ dependencies = [
     "pyvmomi>=8.0.0",
     "mysql-connector-python>=8.0.0",
     "streamlit>=1.28.0",
+    "prometheus-client>=0.22.0",
     "requests>=2.31.0",
     "zeep>=4.2.0",
     "lxml>=4.9.0",
+    "pandas>=2.0.0",
 ]
 
 [project.optional-dependencies]
