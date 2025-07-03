@@ -65,22 +65,12 @@ jobs:
           pip install pytest pytest-cov black flake8 mypy
         fi
 
-    - name: Create test credentials file
-      run: |
-        mkdir -p vcenter_drs
-        cat > vcenter_drs/credentials.json << EOF
-        {
-          "host": "test-vcenter.example.com",
-          "username": "test_user",
-          "password": "test_password",
-          "db_host": "127.0.0.1",
-          "db_user": "test_user",
-          "db_password": "test_password",
-          "db_database": "vcenter_drs_test"
-        }
-        EOF
-
     - name: Initialize test database
+      env:
+        DB_HOST: 127.0.0.1
+        DB_USER: test_user
+        DB_PASSWORD: test_password
+        DB_DATABASE: vcenter_drs_test
       run: |
         mysql -h 127.0.0.1 -u test_user -ptest_password vcenter_drs_test -e "SELECT 1;" || true
         python -c "
@@ -102,6 +92,11 @@ jobs:
         mypy vcenter_drs/ --ignore-missing-imports
 
     - name: Run unit tests
+      env:
+        DB_HOST: 127.0.0.1
+        DB_USER: test_user
+        DB_PASSWORD: test_password
+        DB_DATABASE: vcenter_drs_test
       run: |
         cd vcenter_drs
         pytest tests/ -v --cov=. --cov-report=xml --cov-report=term-missing
