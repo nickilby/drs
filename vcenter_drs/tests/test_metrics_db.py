@@ -42,12 +42,13 @@ class TestMetricsDB:
             credentials_path = f.name
         
         try:
-            db = MetricsDB(credentials_path=credentials_path)
-            
-            assert db.host == "file-host"
-            assert db.user == "file-user"
-            assert db.password == "file-pass"
-            assert db.database == "file-db"
+            from unittest.mock import patch
+            with patch.dict(os.environ, {k: "" for k in ["DB_HOST", "DB_USER", "DB_PASSWORD", "DB_DATABASE"]}):
+                db = MetricsDB(credentials_path=credentials_path)
+                assert db.host == "file-host"
+                assert db.user == "file-user"
+                assert db.password == "file-pass"
+                assert db.database == "file-db"
         finally:
             os.unlink(credentials_path)
 
@@ -249,9 +250,18 @@ class TestMetricsDB:
         mock_cursor = Mock()
         mock_conn.cursor.return_value = mock_cursor
         
-        # Mock fetchall to return test data
+        # Mock fetchall to return test data as a list of dicts
         mock_cursor.fetchall.return_value = [
-            (1, 'test-rule', 'test-alias', '["vm1", "vm2"]', 'test-cluster', 'test-hash', '2023-01-01', 'test reason')
+            {
+                'id': 1,
+                'rule_type': 'test-rule',
+                'alias': 'test-alias',
+                'affected_vms': '["vm1", "vm2"]',
+                'cluster': 'test-cluster',
+                'rule_hash': 'test-hash',
+                'created_at': '2023-01-01',
+                'reason': 'test reason'
+            }
         ]
         
         mock_connect.return_value = mock_conn

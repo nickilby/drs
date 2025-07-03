@@ -45,9 +45,10 @@ class TestConfigManager:
             config_path = f.name
         
         try:
-            config = ConfigManager(config_path)
-            assert config.vcenter.host == "test-vcenter.com"
-            assert config.database.host == "test-db.com"
+            with patch.dict(os.environ, {k: "" for k in ["DB_HOST", "DB_USER", "DB_PASSWORD", "DB_DATABASE"]}):
+                config = ConfigManager(config_path)
+                assert config.vcenter.host == "test-vcenter.com"
+                assert config.database.host == "test-db.com"
         finally:
             os.unlink(config_path)
     

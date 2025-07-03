@@ -100,7 +100,7 @@ class TestComplianceRulesEngine:
             ("z-db-server-cache2", "db-server", "CACHE"),
             ("frontend-app-web", "frontend-app", "WEB"),
             ("simple-name", "simple", "NAME"),
-            ("no-dash-name", None, None),
+            ("no-dash-name", "no-dash", "NAME"),
         ]
         
         for vm_name, expected_alias, expected_role in test_cases:

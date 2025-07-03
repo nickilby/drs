@@ -233,6 +233,7 @@ class MetricsDB:
         if self.conn:
             self.conn.close()
             print("Database connection closed.")
+        self.conn = None
 
     def __enter__(self) -> 'MetricsDB':
         """Context manager entry point."""

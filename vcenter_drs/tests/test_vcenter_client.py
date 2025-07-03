@@ -127,10 +127,9 @@ class TestVCenterPyVmomiClient:
             password="test-pass"
         )
         client.si = Mock()
-        
+        expected_si = client.si
         client.disconnect()
-        
-        mock_disconnect.assert_called_once_with(client.si)
+        mock_disconnect.assert_called_once_with(expected_si)
         assert client.si is None
 
     def test_disconnect_without_connection(self):
