@@ -39,7 +39,8 @@ def extract_pool_from_dataset(dataset_name):
     - HQS1DAT1 -> hqs1
     - HQS2WEB1 -> hqs2
     - L1DAT1 -> l1
-    - M1WEB1 -> m1
+    - M1S2TRA1 -> m1s2
+    - M1S4WEB1 -> m1s4
     - POOL5DAT1 -> pool5
     - STORAGE10WEB1 -> storage10
     
@@ -52,13 +53,14 @@ def extract_pool_from_dataset(dataset_name):
     if not dataset_name:
         return None
     
-    # Generic pattern: Extract letters followed by numbers
-    # This handles: HQS1, L1, M1, POOL5, STORAGE10, etc.
-    match = re.match(r'^([A-Z]+)([0-9]+)', dataset_name, re.IGNORECASE)
+    # Enhanced pattern: Extract letters followed by numbers, optionally followed by letters and numbers
+    # This handles: HQS1, L1, M1S2, M1S4, POOL5, STORAGE10, etc.
+    match = re.match(r'^([A-Z]+)([0-9]+)([A-Z]+[0-9]+)?', dataset_name, re.IGNORECASE)
     if match:
         letters = match.group(1).lower()
         numbers = match.group(2)
-        return f"{letters}{numbers}"
+        suffix = match.group(3).lower() if match.group(3) else ""
+        return f"{letters}{numbers}{suffix}"
     
     return None
 
@@ -324,26 +326,29 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
             # Role-based pool anti-affinity
             if 'role' in rule:
                 role = rule['role'].upper() if isinstance(rule['role'], str) else [r.upper() for r in rule['role']]
-                # Group VMs by pool
-                pool_groups = defaultdict(list)
+                # Group VMs by pool, alias, and role (allow different roles on same pool)
+                pool_alias_role_groups = defaultdict(list)
                 for vm_id, vm in vms.items():
                     alias, vm_role = vm_alias_role[vm_id]
                     dataset_name = vm.get('dataset_name') or ''
                     # Extract pool name from dataset (assuming format like HQS5WEB1, HQS5DAT1 where HQS5 is the pool)
                     pool_name = extract_pool_from_dataset(dataset_name)
                     if ((isinstance(role, str) and vm_role == role) or (isinstance(role, list) and vm_role in role)) and pool_name and any(pat.lower() in pool_name.lower() for pat in patterns):
-                        pool_groups[pool_name].append((vm_id, vm))
-                for pool, group in pool_groups.items():
+                        # Group by pool, alias, and role combination (allow different roles on same pool)
+                        pool_alias_role_groups[(pool_name, alias, vm_role)].append((vm_id, vm))
+                for (pool, alias, vm_role), group in pool_alias_role_groups.items():
                     if len(group) > 1:
-                        # Violation: more than one matching VM on the same pool
+                        # Violation: more than one matching VM on the same pool with same alias and role
                         cluster_ids = set(hosts[vm['host_id']]['cluster_id'] for vm_id, vm in group)
                         for cluster_id in cluster_ids:
                             cluster_name = clusters[cluster_id]
                             vms_on_pool = [vm['name'] for vm_id, vm in group if hosts[vm['host_id']]['cluster_id'] == cluster_id]
                             msg = [
                                 "Pool Anti-Affinity Violation",
-                                f"Rule: VMs with role(s) {role} must NOT be on the same ZFS pool matching {patterns}",
+                                f"Rule: VMs with alias '{alias}' and role '{vm_role}' must NOT be on the same ZFS pool matching {patterns}",
                                 f"Pool: {pool}",
+                                f"Alias: {alias}",
+                                f"Role: {vm_role}",
                                 "VMs on this pool:",
                             ]
                             msg += [f"  - {name}" for name in vms_on_pool]

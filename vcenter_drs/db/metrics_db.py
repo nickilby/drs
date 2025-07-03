@@ -63,7 +63,9 @@ class MetricsDB:
             - db_password: MySQL password
             - db_database: MySQL database name
         """
-        self.credentials_path = credentials_path or "credentials.json"
+        self.credentials_path = credentials_path or os.path.join(
+            os.path.dirname(__file__), '..', 'credentials.json'
+        )
         
         if host and user and password and database:
             self.host = host
