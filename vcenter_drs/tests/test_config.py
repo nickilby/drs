@@ -45,7 +45,10 @@ class TestConfigManager:
             config_path = f.name
         
         try:
-            with patch.dict(os.environ, {k: "" for k in ["DB_HOST", "DB_USER", "DB_PASSWORD", "DB_DATABASE"]}):
+            # Clear environment variables to ensure file values are used
+            env_vars_to_clear = ["DB_HOST", "DB_USER", "DB_PASSWORD", "DB_DATABASE", 
+                                "VCENTER_HOST", "VCENTER_USERNAME", "VCENTER_PASSWORD"]
+            with patch.dict(os.environ, {k: "" for k in env_vars_to_clear}, clear=True):
                 config = ConfigManager(config_path)
                 assert config.vcenter.host == "test-vcenter.com"
                 assert config.database.host == "test-db.com"
