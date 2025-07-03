@@ -331,7 +331,7 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                     dataset_name = vm.get('dataset_name') or ''
                     # Extract pool name from dataset (assuming format like HQS5WEB1, HQS5DAT1 where HQS5 is the pool)
                     pool_name = extract_pool_from_dataset(dataset_name)
-                    if ((isinstance(role, str) and vm_role == role) or (isinstance(role, list) and vm_role in role)) and pool_name and any(pat in pool_name for pat in patterns):
+                    if ((isinstance(role, str) and vm_role == role) or (isinstance(role, list) and vm_role in role)) and pool_name and any(pat.lower() in pool_name.lower() for pat in patterns):
                         pool_groups[pool_name].append((vm_id, vm))
                 for pool, group in pool_groups.items():
                     if len(group) > 1:
@@ -371,7 +371,7 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                         alias, vm_role = vm_alias_role[vm_id]
                         dataset_name = vm.get('dataset_name') or ''
                         pool_name = extract_pool_from_dataset(dataset_name)
-                        if pool_name and any(pat in pool_name for pat in patterns):
+                        if pool_name and any(pat.lower() in pool_name.lower() for pat in patterns):
                             pool_groups[pool_name].append((vm_id, vm))
                 for pool, group in pool_groups.items():
                     if len(group) > 1:
