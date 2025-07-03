@@ -14,9 +14,12 @@ The database stores:
 
 import os
 import json
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Optional, Dict, Any, Tuple, List, Union
 import mysql.connector
-from mysql.connector import Error, MySQLConnection
+from mysql.connector import Error
+from mysql.connector.connection import MySQLConnection
+from mysql.connector.pooling import PooledMySQLConnection
+from mysql.connector.abstracts import MySQLConnectionAbstract
 
 
 class MetricsDB:
@@ -31,7 +34,7 @@ class MetricsDB:
         user (str): MySQL username
         password (str): MySQL password
         database (str): MySQL database name
-        conn (Optional[MySQLConnection]): Active database connection
+        conn (Optional[Union[MySQLConnection, PooledMySQLConnection]]): Active database connection
     """
     
     def __init__(
@@ -60,26 +63,31 @@ class MetricsDB:
             - db_password: MySQL password
             - db_database: MySQL database name
         """
-        if not (host and user and password and database):
-            if credentials_path is None:
-                credentials_path = os.path.join(
-                    os.path.dirname(__file__), '..', 'credentials.json'
-                )
-            
-            with open(os.path.abspath(credentials_path), 'r') as f:
-                creds: Dict[str, str] = json.load(f)
-            
-            self.host = creds['db_host']
-            self.user = creds['db_user']
-            self.password = creds['db_password']
-            self.database = creds['db_database']
-        else:
+        self.credentials_path = credentials_path or "credentials.json"
+        
+        if host and user and password and database:
             self.host = host
             self.user = user
             self.password = password
             self.database = database
+        else:
+            self._load_credentials()
         
-        self.conn: Optional[MySQLConnection] = None
+        # Use Union type to handle both connection types
+        self.conn: Optional[Union[MySQLConnection, PooledMySQLConnection, MySQLConnectionAbstract]] = None
+
+    def _load_credentials(self) -> None:
+        """Load database credentials from JSON file."""
+        if not os.path.exists(self.credentials_path):
+            raise FileNotFoundError(f"Credentials file not found: {self.credentials_path}")
+        
+        with open(self.credentials_path, 'r') as f:
+            creds: Dict[str, str] = json.load(f)
+        
+        self.host = creds['db_host']
+        self.user = creds['db_user']
+        self.password = creds['db_password']
+        self.database = creds['db_database']
 
     def connect(self) -> None:
         """
@@ -221,13 +229,16 @@ class MetricsDB:
         """Context manager exit point."""
         self.close()
 
-    def add_exception(self, exception_dict: dict) -> None:
+    def add_exception(self, exception_dict: Dict[str, Any]) -> None:
         """
         Add an exception to the exceptions table.
         exception_dict should contain: rule_type, alias, affected_vms (list), cluster, rule_hash, reason (optional)
         """
         if not self.conn:
             self.connect()
+        if not self.conn:
+            raise RuntimeError("Failed to connect to database")
+        
         cursor = self.conn.cursor()
         import json as _json
         cursor.execute('''
@@ -244,27 +255,47 @@ class MetricsDB:
         self.conn.commit()
         cursor.close()
 
-    def get_exceptions(self) -> list:
+    def get_exceptions(self) -> List[Dict[str, Any]]:
         """
         Fetch all exceptions from the exceptions table.
         Returns a list of dicts.
         """
         if not self.conn:
             self.connect()
+        if not self.conn:
+            raise RuntimeError("Failed to connect to database")
+        
         cursor = self.conn.cursor(dictionary=True)
         cursor.execute('SELECT * FROM exceptions')
         rows = cursor.fetchall()
         cursor.close()
         import json as _json
+        
+        # Convert rows to proper dictionaries and handle affected_vms
+        result: List[Dict[str, Any]] = []
         for row in rows:
-            if 'affected_vms' in row and row['affected_vms']:
+            if isinstance(row, dict):
+                row_dict: Dict[str, Any] = row.copy()
+            else:
+                # Convert tuple to dict if needed
+                row_dict = {}
+                if hasattr(row, '_fields'):  # Named tuple
+                    for field in row._fields:  # type: ignore
+                        row_dict[field] = getattr(row, field)
+                else:
+                    # Regular tuple - this shouldn't happen with dictionary=True
+                    continue
+            
+            if 'affected_vms' in row_dict and row_dict['affected_vms']:
                 try:
-                    row['affected_vms'] = _json.loads(row['affected_vms'])
+                    affected_vms_str = str(row_dict['affected_vms'])
+                    row_dict['affected_vms'] = _json.loads(affected_vms_str)
                 except Exception:
-                    row['affected_vms'] = []
-        return rows
+                    row_dict['affected_vms'] = []
+            result.append(row_dict)
+        return result
 
-    def is_exception(self, violation_dict: dict) -> bool:
+    def is_exception(self, violation_dict: Dict[str, Any]) -> bool:
         """
         Check if a violation matches any exception in the table.
         Matching is based on rule_type, alias, affected_vms, and cluster.
@@ -272,7 +303,7 @@ class MetricsDB:
         exceptions = self.get_exceptions()
         import hashlib
         import json as _json
-        def make_hash(d):
+        def make_hash(d: Dict[str, Any]) -> str:
             # Use a stable hash of the relevant fields, normalized
             alias = (d.get('alias') or '').strip().lower()
             cluster = (d.get('cluster') or '').strip().lower()

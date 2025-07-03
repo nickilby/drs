@@ -1,6 +1,7 @@
 import streamlit as st
 import sys
 import os
+from typing import Dict, Any
 from api.collect_and_store_metrics import main as collect_and_store_metrics_main
 from rules.rules_engine import evaluate_rules, get_db_state, load_rules, parse_alias_and_role
 import time
@@ -49,13 +50,13 @@ try:
     UPTIME = Gauge('vcenter_drs_uptime_seconds', 'Service uptime in seconds')
 except ValueError:
     # Metrics already exist, get them from registry
-    SERVICE_UP = REGISTRY._names_to_collectors['vcenter_drs_service_up']
-    RULE_VIOLATIONS = REGISTRY._names_to_collectors['vcenter_drs_rule_violations_total']
-    VM_COUNT = REGISTRY._names_to_collectors['vcenter_drs_vm_count']
-    HOST_COUNT = REGISTRY._names_to_collectors['vcenter_drs_host_count']
-    LAST_COLLECTION_TIME = REGISTRY._names_to_collectors['vcenter_drs_last_collection_timestamp']
-    COMPLIANCE_CHECK_DURATION = REGISTRY._names_to_collectors['vcenter_drs_compliance_check_duration_seconds']
-    UPTIME = REGISTRY._names_to_collectors['vcenter_drs_uptime_seconds']
+    SERVICE_UP = REGISTRY._names_to_collectors['vcenter_drs_service_up']  # type: ignore
+    RULE_VIOLATIONS = REGISTRY._names_to_collectors['vcenter_drs_rule_violations_total']  # type: ignore
+    VM_COUNT = REGISTRY._names_to_collectors['vcenter_drs_vm_count']  # type: ignore
+    HOST_COUNT = REGISTRY._names_to_collectors['vcenter_drs_host_count']  # type: ignore
+    LAST_COLLECTION_TIME = REGISTRY._names_to_collectors['vcenter_drs_last_collection_timestamp']  # type: ignore
+    COMPLIANCE_CHECK_DURATION = REGISTRY._names_to_collectors['vcenter_drs_compliance_check_duration_seconds']  # type: ignore
+    UPTIME = REGISTRY._names_to_collectors['vcenter_drs_uptime_seconds']  # type: ignore
 
 # Set service as up
 SERVICE_UP.set(1)
@@ -193,7 +194,7 @@ if page == "Compliance Dashboard":
         COMPLIANCE_CHECK_DURATION.observe(end_time - start_time)
         
         # Update violation metrics
-        violation_counts = defaultdict(int)
+        violation_counts: Dict[str, int] = defaultdict(int)
         if structured_violations:
             for violation in structured_violations:
                 rule_type = violation.get('type', 'unknown')
@@ -316,7 +317,7 @@ elif page == "Rule Management":
         dataset_pattern = st.text_input("Dataset Pattern (comma-separated, for dataset-affinity only)")
         submitted = st.form_submit_button("Add Rule")
         if submitted:
-            new_rule = {"type": rule_type}
+            new_rule: Dict[str, Any] = {"type": rule_type}
             if level != "(none)":
                 new_rule["level"] = level
             if role:
@@ -339,8 +340,8 @@ elif page == "VM Rule Validator":
     rules = load_rules()
     clusters, hosts, vms = get_db_state()
     host_names = [h['name'] for h in hosts.values()]
-    dataset_names = set(v['dataset_name'] for v in vms.values() if v['dataset_name'])
-    dataset_names = sorted(list(dataset_names))
+    dataset_name_set = set(v['dataset_name'] for v in vms.values() if v['dataset_name'])
+    dataset_names = sorted(dataset_name_set)
 
     with st.form("vm_rule_validator_form"):
         vm_name = st.text_input("VM Name", "z-example-alias-LB1")
@@ -389,7 +390,7 @@ elif page == "VM Rule Validator":
                                         violation = f"Would violate anti-affinity: another {role} VM with alias {alias} is already on host {host}."
                             if rule['type'] == 'affinity' and rule.get('level') == 'host':
                                 # If other VMs with same alias+role are on different hosts, would violate
-                                other_hosts = set(v['host_id'] for v in vms.values() if parse_alias_and_role(v['name']) == (alias, role))
+                                other_hosts = set(v['host_id'] for v in vms.values() if parse_alias_and_role(v['name']) == (alias, role) and v['host_id'] is not None)
                                 if other_hosts and host_id not in other_hosts:
                                     violation = f"Would violate affinity: other {role} VMs with alias {alias} are on different hosts."
                 # Dataset affinity/anti-affinity
