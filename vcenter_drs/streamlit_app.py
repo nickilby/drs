@@ -184,31 +184,12 @@ if page == "Compliance Dashboard":
     if 'violations' not in st.session_state:
         st.session_state['violations'] = None
 
+    # Add UI filter for powered-on VMs
+    show_only_powered_on = st.checkbox("Show only powered-on VMs (hide violations for powered-off VMs)", value=True)
+
     if st.button("Run Compliance Check"):
-        # Use the new structured output with timing
-        start_time = time.time()
+        # Use the new structured output
         structured_violations = evaluate_rules(selected_cluster if selected_cluster != "All Clusters" else None, return_structured=True)
-        end_time = time.time()
-        
-        # Record compliance check duration
-        COMPLIANCE_CHECK_DURATION.observe(end_time - start_time)
-        
-        # Update violation metrics
-        violation_counts: Dict[str, int] = defaultdict(int)
-        if structured_violations:
-            for violation in structured_violations:
-                rule_type = violation.get('type', 'unknown')
-                violation_counts[rule_type] += 1
-        
-        # Always ensure metrics exist by setting all known rule types to 0 first
-        known_rule_types = ['anti-affinity', 'dataset-affinity', 'affinity']
-        for rule_type in known_rule_types:
-            RULE_VIOLATIONS.labels(rule_type=rule_type).set(0)
-        
-        # Then set the actual counts
-        for rule_type, count in violation_counts.items():
-            RULE_VIOLATIONS.labels(rule_type=rule_type).set(count)
-        
         st.session_state['violations'] = structured_violations
         if not structured_violations:
             st.success("✅ All VMs in this cluster are compliant! No violations found.")
@@ -223,6 +204,20 @@ if page == "Compliance Dashboard":
         for cluster_name, violations in cluster_grouped.items():
             st.markdown(f"### Cluster: {cluster_name}")
             for idx, violation in enumerate(violations):
+                # Filter: Only show if at least one affected VM is powered on (if filter is enabled)
+                if show_only_powered_on:
+                    # Get power status for affected VMs
+                    _, _, vms = get_db_state()
+                    powered_on = False
+                    for vm_name in violation['affected_vms']:
+                        for vm in vms.values():
+                            if vm['name'] == vm_name and (vm.get('power_status') or '').lower() == 'poweredon':
+                                powered_on = True
+                                break
+                        if powered_on:
+                            break
+                    if not powered_on:
+                        continue
                 expander_title = f"Alias: {violation['alias']} | Rule: {violation['type']}"
                 with st.expander(expander_title, expanded=True):
                     st.code(violation["violation_text"])

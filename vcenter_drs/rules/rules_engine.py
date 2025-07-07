@@ -74,13 +74,13 @@ def get_db_state():
     # Get hosts
     cursor.execute('SELECT * FROM hosts')
     hosts = {row['id']: {'name': row['name'], 'cluster_id': row['cluster_id']} for row in cursor.fetchall()}
-    # Get VMs (with dataset info)
+    # Get VMs (with dataset info and power status)
     cursor.execute('''
-        SELECT v.id, v.name, v.host_id, v.dataset_id, d.name as dataset_name
+        SELECT v.id, v.name, v.host_id, v.dataset_id, d.name as dataset_name, v.power_status
         FROM vms v
         LEFT JOIN datasets d ON v.dataset_id = d.id
     ''')
-    vms = {row['id']: {'name': row['name'], 'host_id': row['host_id'], 'dataset_id': row['dataset_id'], 'dataset_name': row['dataset_name']} for row in cursor.fetchall()}
+    vms = {row['id']: {'name': row['name'], 'host_id': row['host_id'], 'dataset_id': row['dataset_id'], 'dataset_name': row['dataset_name'], 'power_status': row['power_status']} for row in cursor.fetchall()}
     cursor.close()
     db.close()
     return clusters, hosts, vms
