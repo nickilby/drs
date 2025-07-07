@@ -325,18 +325,21 @@ if page == "Compliance Dashboard":
                         except Exception as e:
                             st.error(f"[ERROR] Failed to add exception: {e}")
                     if st.button(f"Remediate/Fix for alias {violation['alias']}", key=f"remediate_fix_{violation['alias']}_{idx}"):
-                        token = st.session_state['remediation_token']
-                        # Select playbook based on rule level
-                        level = violation.get('level', 'host')
-                        if level == 'storage':
-                            playbook_name = 'e-vmotion-storage'
+                        token = st.session_state.get('remediation_token')
+                        if not token:
+                            st.error("You must authenticate first. Please log in via the sidebar to obtain a valid token before attempting remediation.")
                         else:
-                            playbook_name = 'e-vmotion-server'
-                        success, msg = trigger_remediation_api(violation['alias'], violation['affected_vms'], token, playbook_name=playbook_name)
-                        if success:
-                            st.success(msg)
-                        else:
-                            st.error(msg)
+                            # Select playbook based on rule level
+                            level = violation.get('level', 'host')
+                            if level == 'storage':
+                                playbook_name = 'e-vmotion-storage'
+                            else:
+                                playbook_name = 'e-vmotion-server'
+                            success, msg = trigger_remediation_api(violation['alias'], violation['affected_vms'], token, playbook_name=playbook_name)
+                            if success:
+                                st.success(msg)
+                            else:
+                                st.error(msg)
     else:
         st.info("Click 'Run Compliance Check' to evaluate compliance for the selected cluster.")
 
