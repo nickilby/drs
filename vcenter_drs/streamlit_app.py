@@ -15,6 +15,12 @@ import requests
 
 API_BASE_URL = "https://pap.zengenti.com/"
 
+def bold_unicode(text):
+    bold_map = {c: chr(ord(c) + 0x1D400 - ord('A')) for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'}
+    bold_map.update({c: chr(ord(c) + 0x1D41A - ord('a')) for c in 'abcdefghijklmnopqrstuvwxyz'})
+    bold_map.update({c: chr(ord(c) + 0x1D7CE - ord('0')) for c in '0123456789'})
+    return ''.join([str(bold_map.get(ch, ch)) for ch in text])
+
 def trigger_remediation_api(alias, affected_vms, token, playbook_name="e-vmotion-server", priority="high"):
     endpoint = API_BASE_URL.rstrip('/') + '/execute_playbook'
     payload = {
@@ -336,7 +342,7 @@ elif page == "Exception Management":
         df = pd.DataFrame(exceptions)
         # Show a table with a remove button for each exception
         for i, exc in df.iterrows():
-            with st.expander(f"Alias: {exc['alias']} | Rule: {exc['rule_type']} | Cluster: {exc['cluster']}"):
+            with st.expander(f"Alias: {bold_unicode(exc['alias'])} | Rule: {exc['rule_type']} | Cluster: {exc['cluster']}"):
                 st.write(f"**Affected VMs:** {', '.join(exc['affected_vms']) if isinstance(exc['affected_vms'], list) else exc['affected_vms']}")
                 st.write(f"**Created At:** {exc['created_at']}")
                 st.write(f"**Reason:** {exc['reason']}")
