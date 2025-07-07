@@ -1,25 +1,33 @@
 # vCenter DRS Compliance Dashboard
 
-A comprehensive VMware vCenter compliance monitoring and optimization system that enforces VM placement rules based on affinity, anti-affinity, and dataset requirements.
+A robust, extensible compliance and remediation platform for VMware vCenter environments.  
+It enforces VM placement rules (affinity, anti-affinity, dataset/pool requirements), provides a Streamlit-based dashboard, exposes Prometheus metrics, and supports automated remediation and exception management.
+
+---
 
 ## 🚀 Features
 
-- **Real-time vCenter Integration**: Polls vCenter APIs for VM and Host metrics
-- **Compliance Rules Engine**: Enforces complex VM placement rules
-- **Dataset Affinity**: Ensures VMs are placed on appropriate storage datastores
-- **Host Affinity/Anti-affinity**: Manages VM distribution across hosts
-- **Web Dashboard**: Streamlit-based UI for compliance monitoring
-- **Automated Cleanup**: Removes stale VM records automatically
-- **Prometheus Metrics**: Exposes monitoring metrics for observability
-- **Systemd Service**: Runs as a system service with auto-restart
-- **Automated Data Collection**: Cron jobs for background data refresh
+- **Real-time vCenter Integration:** Polls vCenter APIs for VM/Host metrics.
+- **Compliance Rules Engine:** Enforces complex VM placement rules (host, storage, pool).
+- **Automated Remediation:** Triggers playbooks for host/storage violations.
+- **Exception & Rule Management:** UI for adding/removing exceptions and rules.
+- **Prometheus Metrics:** Exposes service and compliance metrics.
+- **Systemd & Cron Support:** Runs as a service, supports scheduled data collection.
+- **Streamlit Dashboard:** Modern, interactive web UI.
+- **CI/CD:** Automated testing and linting via GitHub Actions.
+
+---
 
 ## 📋 Requirements
 
 - Python 3.8+
-- VMware vCenter Server
+- VMware vCenter Server (API access)
 - MySQL Database
-- Network access to vCenter APIs
+- Network access to vCenter and DB
+- Linux (for systemd/cron deployment)
+- [Optional] Prometheus for metrics scraping
+
+---
 
 ## 🛠️ Installation
 
@@ -29,7 +37,7 @@ A comprehensive VMware vCenter compliance monitoring and optimization system tha
    cd vcenter_drs
    ```
 
-2. **Create virtual environment:**
+2. **Create a virtual environment:**
    ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
@@ -54,6 +62,8 @@ A comprehensive VMware vCenter compliance monitoring and optimization system tha
    }
    ```
 
+---
+
 ## 🏃‍♂️ Quick Start
 
 1. **Initialize the database:**
@@ -71,11 +81,13 @@ A comprehensive VMware vCenter compliance monitoring and optimization system tha
    streamlit run vcenter_drs/streamlit_app.py
    ```
 
+---
+
 ## 🚀 Production Deployment
 
-### Systemd Service (Recommended)
+### Systemd Service
 
-1. **Deploy as systemd service:**
+1. **Deploy as a systemd service:**
    ```bash
    ./deploy.sh
    ```
@@ -83,67 +95,50 @@ A comprehensive VMware vCenter compliance monitoring and optimization system tha
 2. **Manage the service:**
    ```bash
    sudo systemctl start vcenter-drs
-   sudo systemctl stop vcenter-drs
-   sudo systemctl restart vcenter-drs
    sudo systemctl status vcenter-drs
    ```
 
 ### Automated Data Collection
 
-Set up cron jobs for automated data collection and compliance checking:
-
+Set up cron jobs:
 ```bash
 ./setup_cron.sh
 ```
 
-This creates two cron jobs:
-- **Data Collection**: Every 15 minutes (`refresh_vcenter_data.py`)
-- **Compliance Checking**: Every 5 minutes (`check_compliance.py`)
+---
 
 ## 📊 Usage
 
 ### Web Dashboard
-- **Refresh Data**: Collects latest metrics from vCenter
-- **Display Results**: Shows compliance violations by cluster
-- **Cluster Filtering**: View violations for specific clusters
-- **Exception Management**: Add/remove compliance exceptions
-- **Rule Management**: View and manage compliance rules
+- **Compliance Results:** View violations by cluster.
+- **Remediation:** Trigger playbooks for violations.
+- **Exception Management:** Add/remove exceptions.
+- **Rule Management:** Add/delete rules.
+- **VM Rule Validator:** Test rules for a given VM.
 
 ### Command Line
 ```bash
-# Collect metrics
 python vcenter_drs/main.py
-
-# Check connectivity
 python vcenter_drs/main.py check
 ```
 
 ### Prometheus Metrics
-
-The application exposes Prometheus metrics on port 8081:
-
+Metrics exposed on port 8081:
 ```bash
 curl http://localhost:8081/metrics
 ```
 
-Available metrics:
-- `vcenter_drs_service_up` - Service status (1=up, 0=down)
-- `vcenter_drs_rule_violations_total` - Current rule violations by type
-- `vcenter_drs_vm_count` - Total number of VMs monitored
-- `vcenter_drs_host_count` - Total number of hosts monitored
-- `vcenter_drs_last_collection_timestamp` - Timestamp of last metrics collection
-- `vcenter_drs_compliance_check_duration_seconds` - Duration of compliance checks
-- `vcenter_drs_uptime_seconds` - Service uptime in seconds
+---
 
 ## 🔧 Configuration
 
-### Rules Configuration
-Edit `vcenter_drs/rules/rules.json` to define compliance rules:
-
+### Rules
+Edit `vcenter_drs/rules/rules.json`:
 ```json
 [
   {
     "type": "dataset-affinity",
+    "level": "storage",
     "name_pattern": "-dr-",
     "dataset_pattern": ["TRA"]
   },
@@ -154,119 +149,72 @@ Edit `vcenter_drs/rules/rules.json` to define compliance rules:
   }
 ]
 ```
+- `"level": "host"` → host playbook
+- `"level": "storage"` → storage playbook
 
-### Rule Types
-- **`dataset-affinity`**: Ensures VMs are on specific datastores
-- **`affinity`**: Keeps VMs together on same host/cluster
-- **`anti-affinity`**: Prevents VMs from being on same host/cluster
-
-### Port Configuration
-- **Streamlit Dashboard**: Port 8080
-- **Prometheus Metrics**: Port 8081
-
-Both ports are configurable in the systemd service file.
+---
 
 ## 🏗️ Architecture
 
 ```
 vcenter_drs/
-├── api/                    # vCenter API integration
-│   ├── vcenter_client_pyvomi.py
-│   └── collect_and_store_metrics.py
-├── db/                     # Database layer
-│   └── metrics_db.py
-├── rules/                  # Compliance rules engine
-│   ├── rules_engine.py
-│   └── rules.json
-├── streamlit_app.py        # Web dashboard
-├── main.py                 # CLI entry point
-├── refresh_vcenter_data.py # Automated data collection
-├── check_compliance.py     # Automated compliance checking
-└── vcenter-drs.service     # Systemd service definition
+├── api/
+├── db/
+├── rules/
+├── streamlit_app.py
+├── main.py
+├── refresh_vcenter_data.py
+├── check_compliance.py
+└── vcenter-drs.service
 ```
 
-## 🔍 Monitoring
+---
 
-The system tracks:
-- **VM Metrics**: CPU, memory usage
-- **Host Metrics**: Resource utilization
-- **Compliance Violations**: Rule violations by cluster
-- **Dataset Placement**: Storage datastore assignments
-- **Service Health**: Uptime and performance metrics
-
-### Log Files
-- **Service Logs**: `sudo journalctl -u vcenter-drs -f`
-- **Data Collection**: `/var/log/vcenter-drs-refresh.log`
-- **Compliance Checks**: `/var/log/vcenter-drs-compliance.log`
-
-## 🧪 Development
+## 🧪 Development & Testing
 
 ### Running Tests
 ```bash
-cd vcenter_drs
-pytest tests/
+pytest drs/vcenter_drs/tests/
 ```
 
-### Code Formatting
+### Linting & Type Checking
 ```bash
 black vcenter_drs/
 flake8 vcenter_drs/
 mypy vcenter_drs/
 ```
 
-### Type Checking
-```bash
-mypy vcenter_drs/
-```
+### CI/CD
+- GitHub Actions runs tests and linting on every push/PR.
+- See `.github/workflows/ci.yml`.
+
+---
+
+## 💡 Coding Best Practices
+
+- **Follow PEP8** for Python code style.
+- **Write tests** for all new features and bugfixes.
+- **Use type hints** and run `mypy` for static type checking.
+- **Document** all public functions and modules.
+- **Keep secrets out of version control** (`credentials.json` is in `.gitignore`).
+- **Use environment variables** for sensitive or environment-specific config when possible.
+- **Modularize code**: keep logic, UI, and data access separate.
+- **Review PRs** before merging; use feature branches.
+
+---
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests if applicable
+4. Add/expand tests
 5. Submit a pull request
+
+---
 
 ## 📝 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT License
 
-## 🆘 Support
-
-For issues and questions:
-1. Check the documentation
-2. Review existing issues
-3. Create a new issue with detailed information
-
-## 📚 Additional Documentation
-
-- [Prometheus Metrics Documentation](PROMETHEUS_METRICS.md)
-- [Deployment Guide](deploy.sh)
-- [Cron Setup Guide](setup_cron.sh)
-
-## CI/CD and Testing
-
-This project uses GitHub Actions for continuous integration and security checks:
-
-- **CI/CD Pipeline:** Runs on push and pull request to main/develop. Checks linting, type checking, unit tests, and code coverage.
-- **Security:** Runs Bandit and Safety for static analysis and dependency vulnerability checks.
-- **Cron/Deployment Scripts:** Syntax and dry-run checks for cron jobs and deployment scripts.
-
-### Running Tests Locally
-
-1. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   pip install pytest pytest-cov
-   ```
-2. Run tests:
-   ```bash
-   pytest tests/
-   ```
-3. Run linting and type checks:
-   ```bash
-   flake8 .
-   mypy .
-   ```
-
-See `.github/workflows/ci.yml` for full details.
+---
