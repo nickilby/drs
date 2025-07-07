@@ -186,7 +186,7 @@ class MetricsDB:
                     name VARCHAR(255),
                     host_id INT,
                     dataset_id INT,
-                    power_status VARCHAR(16) DEFAULT NULL,
+testing                    power_status VARCHAR(16) DEFAULT NULL,
                     FOREIGN KEY (host_id) REFERENCES hosts(id),
                     FOREIGN KEY (dataset_id) REFERENCES datasets(id)
                 ) ENGINE=InnoDB;

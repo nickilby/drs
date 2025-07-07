@@ -78,12 +78,12 @@ def test_dataset_anti_affinity_violation(monkeypatch):
     assert violations[0]["type"] == "dataset-anti-affinity"
 
 def test_pool_anti_affinity_violation(monkeypatch):
-    rules = [{"type": "pool-anti-affinity", "level": "storage", "role": ["WEB"], "pool_pattern": ["HQ"]}]
+    rules = [{"type": "pool-anti-affinity", "level": "storage", "role": ["WEB"], "pool_pattern": ["HQS"]}]
     clusters = {1: "C1"}
     hosts = {1: {"name": "H1", "cluster_id": 1}}
     vms = {
-        1: {"name": "z-alias-WEB1", "host_id": 1, "dataset_id": 1, "dataset_name": "HQ1WEB1", "power_status": "poweredon"},
-        2: {"name": "z-alias-WEB2", "host_id": 1, "dataset_id": 2, "dataset_name": "HQ1WEB2", "power_status": "poweredon"},
+        1: {"name": "z-alias-WEB1", "host_id": 1, "dataset_id": 1, "dataset_name": "HQS1DAT1", "power_status": "poweredon"},
+        2: {"name": "z-alias-WEB2", "host_id": 1, "dataset_id": 2, "dataset_name": "HQS1DAT2", "power_status": "poweredon"},
     }
     patch_engine(monkeypatch, rules, clusters, hosts, vms)
     violations = rules_engine.evaluate_rules(return_structured=True)
