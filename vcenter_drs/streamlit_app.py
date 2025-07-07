@@ -40,7 +40,12 @@ def trigger_remediation_api(alias, affected_vms, token, playbook_name="e-vmotion
         if response.status_code == 200:
             resp_json = response.json()
             if resp_json.get('success'):
-                return True, f"Remediation triggered! Task ID: {resp_json.get('new_task_id')} (deduplicated: {resp_json.get('deduplicated')})"
+                task_id = resp_json.get('new_task_id')
+                url = f"https://dashboard.zengenti.com/env/{alias}/history/{task_id}" if task_id else None
+                msg = f"Remediation triggered! Task ID: {task_id} (deduplicated: {resp_json.get('deduplicated')})"
+                if url:
+                    msg += f"\n[View Task History]({url})"
+                return True, msg
             else:
                 return False, f"Remediation API error: {resp_json}"
         else:
