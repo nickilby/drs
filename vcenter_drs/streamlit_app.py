@@ -321,7 +321,13 @@ if page == "Compliance Dashboard":
                             st.error(f"[ERROR] Failed to add exception: {e}")
                     if st.button(f"Remediate/Fix for alias {violation['alias']}", key=f"remediate_fix_{violation['alias']}_{idx}"):
                         token = st.session_state['remediation_token']
-                        success, msg = trigger_remediation_api(violation['alias'], violation['affected_vms'], token)
+                        # Select playbook based on rule level
+                        level = violation.get('level', 'host')
+                        if level == 'storage':
+                            playbook_name = 'e-vmotion-storage'
+                        else:
+                            playbook_name = 'e-vmotion-server'
+                        success, msg = trigger_remediation_api(violation['alias'], violation['affected_vms'], token, playbook_name=playbook_name)
                         if success:
                             st.success(msg)
                         else:
@@ -378,7 +384,7 @@ elif page == "Rule Management":
     # Simple form for adding a new rule
     with st.form("add_rule_form"):
         rule_type = st.selectbox("Type", ["affinity", "anti-affinity", "dataset-affinity", "dataset-anti-affinity", "pool-anti-affinity"])
-        level = st.selectbox("Level", ["host", "cluster", "(none)"])
+        level = st.selectbox("Level", ["host", "storage", "cluster", "(none)"])
         role = st.text_input("Role (comma-separated for multiple, leave blank if using name_pattern)")
         name_pattern = st.text_input("Name Pattern (optional)")
         dataset_pattern = st.text_input("Dataset Pattern (comma-separated, for dataset-affinity/dataset-anti-affinity only)")

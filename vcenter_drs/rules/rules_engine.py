@@ -153,7 +153,8 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                             "alias": alias,
                             "affected_vms": [vms[vid]['name'] for vid in group_vm_ids],
                             "cluster": cluster_name,
-                            "violation_text": violation_text
+                            "violation_text": violation_text,
+                            "level": rule.get('level', 'host')
                         }
                         if violation_is_exception(violation_obj):
                             continue
@@ -175,7 +176,8 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                             "alias": alias,
                             "affected_vms": [vms[vid]['name'] for vid in group_vm_ids],
                             "cluster": cluster_name,
-                            "violation_text": violation_text
+                            "violation_text": violation_text,
+                            "level": rule.get('level', 'host')
                         }
                         if violation_is_exception(violation_obj):
                             continue
@@ -200,7 +202,8 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                             "alias": alias,
                             "affected_vms": [vms[vid]['name'] for vid in group_vm_ids],
                             "cluster": cluster_name,
-                            "violation_text": violation_text
+                            "violation_text": violation_text,
+                            "level": rule.get('level', 'host')
                         }
                         if violation_is_exception(violation_obj):
                             continue
@@ -234,7 +237,8 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                         "alias": None,
                         "affected_vms": [vms[vid]['name'] for vid in group],
                         "cluster": cluster_name,
-                        "violation_text": violation_text
+                        "violation_text": violation_text,
+                        "level": rule.get('level', 'host')
                     }
                     if violation_is_exception(violation_obj):
                         continue
@@ -275,7 +279,8 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                                 "alias": alias,
                                 "affected_vms": [vm['name']],
                                 "cluster": cluster_name,
-                                "violation_text": violation_text
+                                "violation_text": violation_text,
+                                "level": rule.get('level', 'host')
                             }
                             if violation_is_exception(violation_obj):
                                 continue
@@ -311,7 +316,8 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                                 "alias": alias,
                                 "affected_vms": [vm['name']],
                                 "cluster": cluster_name,
-                                "violation_text": violation_text
+                                "violation_text": violation_text,
+                                "level": rule.get('level', 'host')
                             }
                             if violation_is_exception(violation_obj):
                                 continue
@@ -361,7 +367,8 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                                 "alias": alias,
                                 "affected_vms": vms_on_pool,
                                 "cluster": cluster_name,
-                                "violation_text": violation_text
+                                "violation_text": violation_text,
+                                "level": rule.get('level', 'host')
                             }
                             if violation_is_exception(violation_obj):
                                 continue
@@ -400,7 +407,8 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                                 "alias": None,
                                 "affected_vms": vms_on_pool,
                                 "cluster": cluster_name,
-                                "violation_text": violation_text
+                                "violation_text": violation_text,
+                                "level": rule.get('level', 'host')
                             }
                             if violation_is_exception(violation_obj):
                                 continue
@@ -444,7 +452,8 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                                 "alias": None,
                                 "affected_vms": vms_on_dataset,
                                 "cluster": cluster_name,
-                                "violation_text": violation_text
+                                "violation_text": violation_text,
+                                "level": rule.get('level', 'host')
                             }
                             if violation_is_exception(violation_obj):
                                 continue
@@ -482,7 +491,8 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                                 "alias": None,
                                 "affected_vms": vms_on_dataset,
                                 "cluster": cluster_name,
-                                "violation_text": violation_text
+                                "violation_text": violation_text,
+                                "level": rule.get('level', 'host')
                             }
                             if violation_is_exception(violation_obj):
                                 continue
