@@ -21,8 +21,8 @@ def bold_unicode(text):
     bold_map.update({c: chr(ord(c) + 0x1D7CE - ord('0')) for c in '0123456789'})
     return ''.join([str(bold_map.get(ch, ch)) for ch in text])
 
-def trigger_remediation_api(alias, affected_vms, token, playbook_name="e-vmotion-server", priority="high"):
-    endpoint = API_BASE_URL.rstrip('/') + '/execute_playbook'
+def trigger_remediation_api(alias, affected_vms, token, playbook_name="e-vmotion-server", priority="normal"):
+    endpoint = API_BASE_URL.rstrip('/') + '/execute_playbook/'
     payload = {
         "alias": alias,
         "playbook_name": playbook_name,

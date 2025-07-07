@@ -243,3 +243,30 @@ For issues and questions:
 - [Prometheus Metrics Documentation](PROMETHEUS_METRICS.md)
 - [Deployment Guide](deploy.sh)
 - [Cron Setup Guide](setup_cron.sh)
+
+## CI/CD and Testing
+
+This project uses GitHub Actions for continuous integration and security checks:
+
+- **CI/CD Pipeline:** Runs on push and pull request to main/develop. Checks linting, type checking, unit tests, and code coverage.
+- **Security:** Runs Bandit and Safety for static analysis and dependency vulnerability checks.
+- **Cron/Deployment Scripts:** Syntax and dry-run checks for cron jobs and deployment scripts.
+
+### Running Tests Locally
+
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   pip install pytest pytest-cov
+   ```
+2. Run tests:
+   ```bash
+   pytest tests/
+   ```
+3. Run linting and type checks:
+   ```bash
+   flake8 .
+   mypy .
+   ```
+
+See `.github/workflows/ci.yml` for full details.
