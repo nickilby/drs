@@ -358,7 +358,7 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                             violation_obj = {
                                 "type": rule['type'],
                                 "rule": rule,
-                                "alias": None,
+                                "alias": alias,
                                 "affected_vms": vms_on_pool,
                                 "cluster": cluster_name,
                                 "violation_text": violation_text

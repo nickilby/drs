@@ -11,6 +11,7 @@ from vcenter_drs.db.metrics_db import MetricsDB
 import json
 from prometheus_client import start_http_server, Gauge, Counter, Histogram, REGISTRY
 import atexit
+import requests
 
 st.set_page_config(page_title="vCenter DRS Compliance Dashboard", layout="wide")
 
@@ -224,8 +225,20 @@ if page == "Compliance Dashboard":
                     st.write(f"**Rule Type:** {violation['type']}")
                     st.write(f"**Alias:** {violation['alias']}")
                     st.write(f"**Affected VMs:** {', '.join(violation['affected_vms'])}")
-                    if st.button(f"Remediate Violation {cluster_name}-{idx+1}", key=f"remediate_{cluster_name}_{idx}"):
-                        st.success(f"Remediation triggered for violation {idx+1} in {cluster_name}.\nRule type: {violation['type']} | Alias: {violation['alias']} | VMs: {', '.join(violation['affected_vms'])}")
+                    # Remediate/Fix button for API call
+                    if st.button(f"Remediate/Fix for {violation['alias']}", key=f"remediate_fix_{violation['alias']}_{idx}"):
+                        api_url = "http://your-api-endpoint/trigger-ansible-playbook"  # TODO: Replace with actual endpoint
+                        payload = {
+                            "limit": ','.join(violation['affected_vms'])
+                        }
+                        try:
+                            response = requests.post(api_url, json=payload, timeout=10)
+                            if response.status_code == 200:
+                                st.success(f"Remediation triggered for: {payload['limit']}")
+                            else:
+                                st.error(f"API call failed: {response.status_code} {response.text}")
+                        except Exception as e:
+                            st.error(f"API call error: {e}")
                     if st.button("Add Exception", key=f"add_exc_{cluster_name}_{idx}"):
                         import hashlib
                         # Normalize fields for robust matching
