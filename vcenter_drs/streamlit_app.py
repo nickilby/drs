@@ -13,6 +13,35 @@ from prometheus_client import start_http_server, Gauge, Counter, Histogram, REGI
 import atexit
 import requests
 
+API_BASE_URL = "https://pap.zengenti.com/"
+
+def trigger_remediation_api(alias, affected_vms, token, playbook_name="e-vmotion-server", priority="high"):
+    endpoint = API_BASE_URL.rstrip('/') + '/execute_playbook'
+    payload = {
+        "alias": alias,
+        "playbook_name": playbook_name,
+        "priority": priority,
+        "options": {
+            "limit": affected_vms
+        }
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "X-Security-Token": token
+    }
+    try:
+        response = requests.post(endpoint, json=payload, headers=headers, timeout=10)
+        if response.status_code == 200:
+            resp_json = response.json()
+            if resp_json.get('success'):
+                return True, f"Remediation triggered! Task ID: {resp_json.get('new_task_id')} (deduplicated: {resp_json.get('deduplicated')})"
+            else:
+                return False, f"Remediation API error: {resp_json}"
+        else:
+            return False, f"API call failed: {response.status_code} {response.text}"
+    except Exception as e:
+        return False, f"API call error: {e}"
+
 st.set_page_config(page_title="vCenter DRS Compliance Dashboard", layout="wide")
 
 # Prometheus Metrics Setup
@@ -88,6 +117,35 @@ def cleanup():
 atexit.register(cleanup)
 
 st.title("vCenter DRS Compliance Dashboard")
+
+# Sidebar: API Authentication
+with st.sidebar:
+    st.header("API Authentication")
+    username = st.text_input("Username", value=st.session_state.get('auth_username', ''))
+    password = st.text_input("Password", type="password", value=st.session_state.get('auth_password', ''))
+    if st.button("Authenticate"):
+        auth_url = API_BASE_URL.rstrip('/') + '/users/authenticate'
+        try:
+            resp = requests.post(auth_url, json={"username": username, "password": password}, timeout=10)
+            if resp.status_code == 200:
+                resp_json = resp.json()
+                token = resp_json.get("token")
+                if token:
+                    st.session_state['remediation_token'] = token
+                    st.session_state['auth_username'] = username
+                    st.session_state['auth_password'] = password
+                    st.success("Successfully authenticated. Token stored for session.")
+                else:
+                    st.error(f"Authentication failed: No token in response. {resp_json}")
+            else:
+                st.error(f"Authentication failed: {resp.status_code} {resp.text}")
+        except Exception as e:
+            st.error(f"Authentication error: {e}")
+    if st.session_state.get('remediation_token'):
+        st.info("Token is set for this session.")
+        show_token = st.checkbox("Show token", value=False)
+        if show_token:
+            st.code(st.session_state['remediation_token'], language=None)
 
 # Load clusters from the database
 def get_clusters():
@@ -225,20 +283,7 @@ if page == "Compliance Dashboard":
                     st.write(f"**Rule Type:** {violation['type']}")
                     st.write(f"**Alias:** {violation['alias']}")
                     st.write(f"**Affected VMs:** {', '.join(violation['affected_vms'])}")
-                    # Remediate/Fix button for API call
-                    if st.button(f"Remediate/Fix for {violation['alias']}", key=f"remediate_fix_{violation['alias']}_{idx}"):
-                        api_url = "http://your-api-endpoint/trigger-ansible-playbook"  # TODO: Replace with actual endpoint
-                        payload = {
-                            "limit": ','.join(violation['affected_vms'])
-                        }
-                        try:
-                            response = requests.post(api_url, json=payload, timeout=10)
-                            if response.status_code == 200:
-                                st.success(f"Remediation triggered for: {payload['limit']}")
-                            else:
-                                st.error(f"API call failed: {response.status_code} {response.text}")
-                        except Exception as e:
-                            st.error(f"API call error: {e}")
+
                     if st.button("Add Exception", key=f"add_exc_{cluster_name}_{idx}"):
                         import hashlib
                         # Normalize fields for robust matching
@@ -268,6 +313,13 @@ if page == "Compliance Dashboard":
                             st.success(f"Exception added for Alias: {violation.get('alias')} | Rule: {violation.get('type')}. This violation will be ignored in future checks.")
                         except Exception as e:
                             st.error(f"[ERROR] Failed to add exception: {e}")
+                    if st.button(f"Remediate/Fix for alias {violation['alias']}", key=f"remediate_fix_{violation['alias']}_{idx}"):
+                        token = st.session_state['remediation_token']
+                        success, msg = trigger_remediation_api(violation['alias'], violation['affected_vms'], token)
+                        if success:
+                            st.success(msg)
+                        else:
+                            st.error(msg)
     else:
         st.info("Click 'Run Compliance Check' to evaluate compliance for the selected cluster.")
 
