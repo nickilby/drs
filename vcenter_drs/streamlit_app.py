@@ -283,147 +283,341 @@ if page == "Compliance Dashboard":
             st.success("✅ All VMs in this cluster are compliant! No violations found.")
             st.balloons()
 
+    def display_single_violation(violation, cluster_name, idx, show_only_powered_on):
+        """Display a single violation"""
+        # Filter: Only show if at least one affected VM is powered on (if filter is enabled)
+        if show_only_powered_on:
+            # Get power status for affected VMs
+            _, _, vms = get_db_state()
+            powered_on = False
+            for vm_name in violation['affected_vms']:
+                for vm in vms.values():
+                    if vm['name'] == vm_name and (vm.get('power_status') or '').lower() == 'poweredon':
+                        powered_on = True
+                        break
+                if powered_on:
+                    break
+            if not powered_on:
+                return
+        
+        expander_title = f"Alias: {violation['alias']} | Rule: {violation['type']}"
+        with st.expander(expander_title, expanded=True):
+            st.code(violation["violation_text"])
+            st.write(f"**Rule Type:** {violation['type']}")
+            # Extract alias for display
+            if violation['alias'] is not None:
+                display_alias = violation['alias']
+            elif violation['affected_vms']:
+                # Extract alias from first VM name for CockroachDB pattern
+                first_vm = violation['affected_vms'][0]
+                if first_vm.startswith('z-cockroach-'):
+                    # Extract cluster name from z-cockroach-{cluster}-{node}
+                    parts = first_vm.split('-')
+                    if len(parts) >= 3:
+                        display_alias = f"cockroach-{parts[2]}"  # cockroach-{cluster}
+                    else:
+                        display_alias = first_vm
+                else:
+                    display_alias = first_vm
+            else:
+                display_alias = 'unknown'
+            st.write(f"**Alias:** {display_alias}")
+            st.write(f"**Affected VMs:** {', '.join(violation['affected_vms'])}")
+
+            if st.button("Add Exception", key=f"add_exc_{cluster_name}_{idx}"):
+                import hashlib
+                # Normalize fields for robust matching - extract alias for name-pattern rules
+                if violation.get('alias') is not None:
+                    alias = violation.get('alias').strip().lower()
+                elif violation.get('affected_vms'):
+                    # Extract alias from first VM name for CockroachDB pattern
+                    first_vm = violation['affected_vms'][0]
+                    if first_vm.startswith('z-cockroach-'):
+                        # Extract cluster name from z-cockroach-{cluster}-{node}
+                        parts = first_vm.split('-')
+                        if len(parts) >= 3:
+                            alias = f"cockroach-{parts[2]}".lower()  # cockroach-{cluster}
+                        else:
+                            alias = first_vm.lower()
+                    else:
+                        alias = first_vm.lower()
+                else:
+                    alias = 'unknown'
+                cluster = (violation.get('cluster') or '').strip().lower()
+                affected_vms = [vm.strip().lower() for vm in violation.get('affected_vms', [])]
+                relevant = {
+                    'rule_type': violation.get('type'),
+                    'alias': alias,
+                    'affected_vms': sorted(affected_vms),
+                    'cluster': cluster
+                }
+                rule_hash = hashlib.sha256(json.dumps(relevant, sort_keys=True).encode()).hexdigest()
+                exception_data = {
+                    'rule_type': violation.get('type'),
+                    'alias': alias,
+                    'affected_vms': affected_vms,
+                    'cluster': cluster,
+                    'rule_hash': rule_hash,
+                    'reason': None
+                }
+                try:
+                    db = MetricsDB()
+                    db.connect()
+                    db.add_exception(exception_data)
+                    db.close()
+                    st.success(f"Exception added for Alias: {alias} | Rule: {violation.get('type')}. This violation will be ignored in future checks.")
+                except Exception as e:
+                    st.error(f"[ERROR] Failed to add exception: {e}")
+            # For name-pattern-based rules, extract alias from VM name
+            if violation['alias'] is not None:
+                alias_display = violation['alias']
+            elif violation['affected_vms']:
+                # Extract alias from first VM name for CockroachDB pattern
+                first_vm = violation['affected_vms'][0]
+                if first_vm.startswith('z-cockroach-'):
+                    # Extract cluster name from z-cockroach-{cluster}-{node}
+                    parts = first_vm.split('-')
+                    if len(parts) >= 3:
+                        alias_display = f"cockroach-{parts[2]}"  # cockroach-{cluster}
+                    else:
+                        alias_display = first_vm
+                else:
+                    alias_display = first_vm
+            else:
+                alias_display = 'unknown'
+            if st.button(f"Remediate/Fix for alias {alias_display}", key=f"remediate_fix_{cluster_name}_{idx}"):
+                token = st.session_state.get('remediation_token')
+                if not token:
+                    st.error("You must authenticate first. Please log in via the sidebar to obtain a valid token before attempting remediation.")
+                else:
+                    # Select playbook based on rule level
+                    level = violation.get('level', 'host')
+                    if level == 'storage':
+                        playbook_name = 'e-vmotion-storage'
+                    else:
+                        playbook_name = 'e-vmotion-server'
+                    # For name-pattern-based rules, extract alias from VM name
+                    if violation['alias'] is not None:
+                        alias = violation['alias']
+                    elif violation['affected_vms']:
+                        # Extract alias from first VM name for CockroachDB pattern
+                        first_vm = violation['affected_vms'][0]
+                        if first_vm.startswith('z-cockroach-'):
+                            # Extract cluster name from z-cockroach-{cluster}-{node}
+                            parts = first_vm.split('-')
+                            if len(parts) >= 3:
+                                alias = f"cockroach-{parts[2]}"  # cockroach-{cluster}
+                            else:
+                                alias = first_vm
+                        else:
+                            alias = first_vm
+                    else:
+                        alias = 'unknown'
+                    success, msg = trigger_remediation_api(alias, violation['affected_vms'], token, playbook_name=playbook_name)
+                    if success:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+
+    def display_grouped_violations(grouped_violations, cluster_name, show_only_powered_on):
+        """Display multiple violations for the same alias/rule as a grouped violation"""
+        # Check if any VMs are powered on (if filter is enabled)
+        if show_only_powered_on:
+            _, _, vms = get_db_state()
+            powered_on = False
+            for violation in grouped_violations:
+                for vm_name in violation['affected_vms']:
+                    for vm in vms.values():
+                        if vm['name'] == vm_name and (vm.get('power_status') or '').lower() == 'poweredon':
+                            powered_on = True
+                            break
+                    if powered_on:
+                        break
+                if powered_on:
+                    break
+            if not powered_on:
+                return
+        
+        # Extract alias for display
+        first_violation = grouped_violations[0]
+        if first_violation['alias'] is not None:
+            display_alias = first_violation['alias']
+        elif first_violation['affected_vms']:
+            # Extract alias from first VM name for CockroachDB pattern
+            first_vm = first_violation['affected_vms'][0]
+            if first_vm.startswith('z-cockroach-'):
+                # Extract cluster name from z-cockroach-{cluster}-{node}
+                parts = first_vm.split('-')
+                if len(parts) >= 3:
+                    display_alias = f"cockroach-{parts[2]}"  # cockroach-{cluster}
+                else:
+                    display_alias = first_vm
+            else:
+                display_alias = first_vm
+        else:
+            display_alias = 'unknown'
+        
+        # Combine all affected VMs and create grouped violation text
+        all_affected_vms = []
+        all_pools = set()
+        combined_violation_text = []
+        
+        for violation in grouped_violations:
+            all_affected_vms.extend(violation['affected_vms'])
+            # Extract pool information from violation text
+            violation_lines = violation['violation_text'].split('\n')
+            for line in violation_lines:
+                if line.startswith('Pool: '):
+                    pool_name = line.replace('Pool: ', '').strip()
+                    all_pools.add(pool_name)
+                    break
+        
+        # Create grouped violation text
+        combined_violation_text.append(f"Pool Anti-Affinity Violation (Grouped)")
+        combined_violation_text.append(f"Rule: VMs with name containing 'z-cockroach-' must NOT be on the same ZFS pool matching ['HQ', 'L', 'M']")
+        combined_violation_text.append(f"Alias: {display_alias}")
+        combined_violation_text.append(f"Affected Pools: {', '.join(sorted(all_pools))}")
+        combined_violation_text.append("VMs affected across all pools:")
+        for vm in sorted(set(all_affected_vms)):
+            combined_violation_text.append(f"  - {vm}")
+        combined_violation_text.append("Suggestions:")
+        combined_violation_text.append("  - Move VMs to distribute them across different pools")
+        
+        expander_title = f"Alias: {display_alias} | Rule: {first_violation['type']} (Grouped - {len(grouped_violations)} violations)"
+        with st.expander(expander_title, expanded=True):
+            st.code('\n'.join(combined_violation_text))
+            st.write(f"**Rule Type:** {first_violation['type']}")
+            st.write(f"**Alias:** {display_alias}")
+            st.write(f"**Affected VMs:** {', '.join(sorted(set(all_affected_vms)))}")
+            st.write(f"**Affected Pools:** {', '.join(sorted(all_pools))}")
+            st.write(f"**Number of Violations:** {len(grouped_violations)}")
+
+            if st.button("Add Exception", key=f"add_exc_grouped_{cluster_name}_{display_alias}"):
+                import hashlib
+                # Use the same alias extraction logic
+                if first_violation.get('alias') is not None:
+                    alias = first_violation.get('alias').strip().lower()
+                elif first_violation.get('affected_vms'):
+                    first_vm = first_violation['affected_vms'][0]
+                    if first_vm.startswith('z-cockroach-'):
+                        parts = first_vm.split('-')
+                        if len(parts) >= 3:
+                            alias = f"cockroach-{parts[2]}".lower()
+                        else:
+                            alias = first_vm.lower()
+                    else:
+                        alias = first_vm.lower()
+                else:
+                    alias = 'unknown'
+                
+                cluster = (first_violation.get('cluster') or '').strip().lower()
+                affected_vms = [vm.strip().lower() for vm in set(all_affected_vms)]
+                relevant = {
+                    'rule_type': first_violation.get('type'),
+                    'alias': alias,
+                    'affected_vms': sorted(affected_vms),
+                    'cluster': cluster
+                }
+                rule_hash = hashlib.sha256(json.dumps(relevant, sort_keys=True).encode()).hexdigest()
+                exception_data = {
+                    'rule_type': first_violation.get('type'),
+                    'alias': alias,
+                    'affected_vms': affected_vms,
+                    'cluster': cluster,
+                    'rule_hash': rule_hash,
+                    'reason': None
+                }
+                try:
+                    db = MetricsDB()
+                    db.connect()
+                    db.add_exception(exception_data)
+                    db.close()
+                    st.success(f"Exception added for Alias: {alias} | Rule: {first_violation.get('type')}. This violation will be ignored in future checks.")
+                except Exception as e:
+                    st.error(f"[ERROR] Failed to add exception: {e}")
+            
+            if st.button(f"Remediate/Fix for alias {display_alias} (Grouped)", key=f"remediate_fix_grouped_{cluster_name}_{display_alias}"):
+                token = st.session_state.get('remediation_token')
+                if not token:
+                    st.error("You must authenticate first. Please log in via the sidebar to obtain a valid token before attempting remediation.")
+                else:
+                    # Select playbook based on rule level
+                    level = first_violation.get('level', 'host')
+                    if level == 'storage':
+                        playbook_name = 'e-vmotion-storage'
+                    else:
+                        playbook_name = 'e-vmotion-server'
+                    
+                    # Use the same alias extraction logic
+                    if first_violation['alias'] is not None:
+                        alias = first_violation['alias']
+                    elif first_violation['affected_vms']:
+                        first_vm = first_violation['affected_vms'][0]
+                        if first_vm.startswith('z-cockroach-'):
+                            parts = first_vm.split('-')
+                            if len(parts) >= 3:
+                                alias = f"cockroach-{parts[2]}"
+                            else:
+                                alias = first_vm
+                        else:
+                            alias = first_vm
+                    else:
+                        alias = 'unknown'
+                    
+                    # Pass all affected VMs for grouped remediation
+                    success, msg = trigger_remediation_api(alias, list(set(all_affected_vms)), token, playbook_name=playbook_name)
+                    if success:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+
     # Only display violations if they exist in session state
     if st.session_state['violations']:
         from collections import defaultdict
+        
+        # Group violations by cluster, then by (alias, rule_type) to combine related violations
         cluster_grouped = defaultdict(list)
         for v in st.session_state['violations']:
             cluster_grouped[v["cluster"]].append(v)
+        
         for cluster_name, violations in cluster_grouped.items():
             st.markdown(f"### Cluster: {cluster_name}")
-            for idx, violation in enumerate(violations):
-                # Filter: Only show if at least one affected VM is powered on (if filter is enabled)
-                if show_only_powered_on:
-                    # Get power status for affected VMs
-                    _, _, vms = get_db_state()
-                    powered_on = False
-                    for vm_name in violation['affected_vms']:
-                        for vm in vms.values():
-                            if vm['name'] == vm_name and (vm.get('power_status') or '').lower() == 'poweredon':
-                                powered_on = True
-                                break
-                        if powered_on:
-                            break
-                    if not powered_on:
-                        continue
-                expander_title = f"Alias: {violation['alias']} | Rule: {violation['type']}"
-                with st.expander(expander_title, expanded=True):
-                    st.code(violation["violation_text"])
-                    st.write(f"**Rule Type:** {violation['type']}")
-                    # Extract alias for display
-                    if violation['alias'] is not None:
-                        display_alias = violation['alias']
-                    elif violation['affected_vms']:
-                        # Extract alias from first VM name for CockroachDB pattern
-                        first_vm = violation['affected_vms'][0]
-                        if first_vm.startswith('z-cockroach-'):
-                            # Extract cluster name from z-cockroach-{cluster}-{node}
-                            parts = first_vm.split('-')
-                            if len(parts) >= 3:
-                                display_alias = f"cockroach-{parts[2]}"  # cockroach-{cluster}
-                            else:
-                                display_alias = first_vm
+            
+            # Group violations by alias and rule type
+            alias_rule_grouped = defaultdict(list)
+            for violation in violations:
+                # Extract alias for grouping
+                if violation['alias'] is not None:
+                    alias = violation['alias']
+                elif violation['affected_vms']:
+                    # Extract alias from first VM name for CockroachDB pattern
+                    first_vm = violation['affected_vms'][0]
+                    if first_vm.startswith('z-cockroach-'):
+                        # Extract cluster name from z-cockroach-{cluster}-{node}
+                        parts = first_vm.split('-')
+                        if len(parts) >= 3:
+                            alias = f"cockroach-{parts[2]}"  # cockroach-{cluster}
                         else:
-                            display_alias = first_vm
+                            alias = first_vm
                     else:
-                        display_alias = 'unknown'
-                    st.write(f"**Alias:** {display_alias}")
-                    st.write(f"**Affected VMs:** {', '.join(violation['affected_vms'])}")
-
-                    if st.button("Add Exception", key=f"add_exc_{cluster_name}_{idx}"):
-                        import hashlib
-                        # Normalize fields for robust matching - extract alias for name-pattern rules
-                        if violation.get('alias') is not None:
-                            alias = violation.get('alias').strip().lower()
-                        elif violation.get('affected_vms'):
-                            # Extract alias from first VM name for CockroachDB pattern
-                            first_vm = violation['affected_vms'][0]
-                            if first_vm.startswith('z-cockroach-'):
-                                # Extract cluster name from z-cockroach-{cluster}-{node}
-                                parts = first_vm.split('-')
-                                if len(parts) >= 3:
-                                    alias = f"cockroach-{parts[2]}".lower()  # cockroach-{cluster}
-                                else:
-                                    alias = first_vm.lower()
-                            else:
-                                alias = first_vm.lower()
-                        else:
-                            alias = 'unknown'
-                        cluster = (violation.get('cluster') or '').strip().lower()
-                        affected_vms = [vm.strip().lower() for vm in violation.get('affected_vms', [])]
-                        relevant = {
-                            'rule_type': violation.get('type'),
-                            'alias': alias,
-                            'affected_vms': sorted(affected_vms),
-                            'cluster': cluster
-                        }
-                        rule_hash = hashlib.sha256(json.dumps(relevant, sort_keys=True).encode()).hexdigest()
-                        exception_data = {
-                            'rule_type': violation.get('type'),
-                            'alias': alias,
-                            'affected_vms': affected_vms,
-                            'cluster': cluster,
-                            'rule_hash': rule_hash,
-                            'reason': None
-                        }
-                        try:
-                            db = MetricsDB()
-                            db.connect()
-                            db.add_exception(exception_data)
-                            db.close()
-                            st.success(f"Exception added for Alias: {alias} | Rule: {violation.get('type')}. This violation will be ignored in future checks.")
-                        except Exception as e:
-                            st.error(f"[ERROR] Failed to add exception: {e}")
-                    # For name-pattern-based rules, extract alias from VM name
-                    if violation['alias'] is not None:
-                        alias_display = violation['alias']
-                    elif violation['affected_vms']:
-                        # Extract alias from first VM name for CockroachDB pattern
-                        first_vm = violation['affected_vms'][0]
-                        if first_vm.startswith('z-cockroach-'):
-                            # Extract cluster name from z-cockroach-{cluster}-{node}
-                            parts = first_vm.split('-')
-                            if len(parts) >= 3:
-                                alias_display = f"cockroach-{parts[2]}"  # cockroach-{cluster}
-                            else:
-                                alias_display = first_vm
-                        else:
-                            alias_display = first_vm
-                    else:
-                        alias_display = 'unknown'
-                    if st.button(f"Remediate/Fix for alias {alias_display}", key=f"remediate_fix_{cluster_name}_{idx}"):
-                        token = st.session_state.get('remediation_token')
-                        if not token:
-                            st.error("You must authenticate first. Please log in via the sidebar to obtain a valid token before attempting remediation.")
-                        else:
-                            # Select playbook based on rule level
-                            level = violation.get('level', 'host')
-                            if level == 'storage':
-                                playbook_name = 'e-vmotion-storage'
-                            else:
-                                playbook_name = 'e-vmotion-server'
-                            # For name-pattern-based rules, extract alias from VM name
-                            if violation['alias'] is not None:
-                                alias = violation['alias']
-                            elif violation['affected_vms']:
-                                # Extract alias from first VM name for CockroachDB pattern
-                                first_vm = violation['affected_vms'][0]
-                                if first_vm.startswith('z-cockroach-'):
-                                    # Extract cluster name from z-cockroach-{cluster}-{node}
-                                    parts = first_vm.split('-')
-                                    if len(parts) >= 3:
-                                        alias = f"cockroach-{parts[2]}"  # cockroach-{cluster}
-                                    else:
-                                        alias = first_vm
-                                else:
-                                    alias = first_vm
-                            else:
-                                alias = 'unknown'
-                            success, msg = trigger_remediation_api(alias, violation['affected_vms'], token, playbook_name=playbook_name)
-                            if success:
-                                st.success(msg)
-                            else:
-                                st.error(msg)
+                        alias = first_vm
+                else:
+                    alias = 'unknown'
+                
+                # Group by (alias, rule_type)
+                group_key = (alias, violation['type'])
+                alias_rule_grouped[group_key].append(violation)
+            
+            # Display grouped violations
+            for (alias, rule_type), grouped_violations in alias_rule_grouped.items():
+                if len(grouped_violations) == 1:
+                    # Single violation - display normally
+                    violation = grouped_violations[0]
+                    idx = violations.index(violation)
+                    display_single_violation(violation, cluster_name, idx, show_only_powered_on)
+                else:
+                    # Multiple violations for same alias/rule - display as grouped
+                    display_grouped_violations(grouped_violations, cluster_name, show_only_powered_on)
     else:
         st.info("Click 'Run Compliance Check' to evaluate compliance for the selected cluster.")
 
