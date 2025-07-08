@@ -27,7 +27,7 @@ try:
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler('/var/log/vcenter-drs-compliance.log'),
+            logging.FileHandler('vcenter-drs-compliance.log'),
             logging.StreamHandler()
         ]
     )
@@ -41,6 +41,10 @@ try:
             # Run compliance check with structured output
             structured_violations = evaluate_rules(None, return_structured=True)
             
+            # Load VM power status from DB
+            _, _, vms_db = get_db_state()
+            vm_power_status = {vm['name']: str(vm.get('power_status') or '').lower() for vm in vms_db.values()}
+            
             # Update Prometheus metrics
             try:
                 # Get or create metrics
@@ -51,15 +55,18 @@ try:
                 duration = time.time() - start_time
                 COMPLIANCE_CHECK_DURATION.observe(duration)
                 
-                # Count violations by rule type
+                # Count violations by rule type (only if at least one affected VM is powered on)
                 violation_counts = defaultdict(int)
                 if structured_violations:
                     for violation in structured_violations:
-                        rule_type = violation.get('type', 'unknown')
-                        violation_counts[rule_type] += 1
+                        affected_vms = violation.get('affected_vms', [])
+                        any_powered_on = any(vm_power_status.get(vm_name, '') == 'poweredon' for vm_name in affected_vms)
+                        if any_powered_on:
+                            rule_type = violation.get('type', 'unknown')
+                            violation_counts[rule_type] += 1
                 
                 # Always ensure metrics exist by setting all known rule types to 0 first
-                known_rule_types = ['anti-affinity', 'dataset-affinity', 'affinity']
+                known_rule_types = ['anti-affinity', 'dataset-affinity', 'dataset-anti-affinity', 'affinity', 'pool-anti-affinity']
                 for rule_type in known_rule_types:
                     RULE_VIOLATIONS.labels(rule_type=rule_type).set(0)
                 
@@ -68,7 +75,7 @@ try:
                     RULE_VIOLATIONS.labels(rule_type=rule_type).set(count)
                 
                 total_violations = sum(violation_counts.values())
-                logging.info(f"Compliance check completed: {total_violations} total violations found")
+                logging.info(f"Compliance check completed: {total_violations} total violations found (powered on VMs only)")
                 logging.info(f"Violations by type: {dict(violation_counts)}")
                 
             except Exception as e:

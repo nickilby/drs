@@ -103,10 +103,28 @@ except ValueError:
 SERVICE_UP.set(1)
 start_time = time.time()
 
-# Initialize violation metrics with 0 values to ensure they're always present
-known_rule_types = ['anti-affinity', 'dataset-affinity', 'affinity']
+# Load VM power status from DB
+_, _, vms_db = get_db_state()
+vm_power_status = {vm['name']: str(vm.get('power_status') or '').lower() for vm in vms_db.values()}
+
+# Count violations by rule type (only if at least one affected VM is powered on)
+violation_counts = defaultdict(int)
+if 'violations' in st.session_state and st.session_state['violations']:
+    for violation in st.session_state['violations']:
+        affected_vms = violation.get('affected_vms', [])
+        any_powered_on = any(vm_power_status.get(vm_name, '') == 'poweredon' for vm_name in affected_vms)
+        if any_powered_on:
+            rule_type = violation.get('type', 'unknown')
+            violation_counts[rule_type] += 1
+
+# Always ensure metrics exist by setting all known rule types to 0 first
+known_rule_types = ['anti-affinity', 'dataset-affinity', 'dataset-anti-affinity', 'affinity', 'pool-anti-affinity']
 for rule_type in known_rule_types:
     RULE_VIOLATIONS.labels(rule_type=rule_type).set(0)
+
+# Then set the actual counts
+for rule_type, count in violation_counts.items():
+    RULE_VIOLATIONS.labels(rule_type=rule_type).set(count)
 
 # Update uptime periodically
 def update_uptime():
