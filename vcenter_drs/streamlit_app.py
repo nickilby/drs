@@ -108,7 +108,7 @@ _, _, vms_db = get_db_state()
 vm_power_status = {vm['name']: str(vm.get('power_status') or '').lower() for vm in vms_db.values()}
 
 # Count violations by rule type (only if at least one affected VM is powered on)
-violation_counts = defaultdict(int)
+violation_counts: Dict[str, int] = defaultdict(int)
 if 'violations' in st.session_state and st.session_state['violations']:
     for violation in st.session_state['violations']:
         affected_vms = violation.get('affected_vms', [])

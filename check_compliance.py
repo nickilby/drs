@@ -47,9 +47,16 @@ try:
             
             # Update Prometheus metrics
             try:
-                # Get or create metrics
-                RULE_VIOLATIONS = Gauge('vcenter_drs_rule_violations_total', 'Current rule violations by type', ['rule_type'])
-                COMPLIANCE_CHECK_DURATION = Histogram('vcenter_drs_compliance_check_duration_seconds', 'Duration of compliance checks')
+                # Get or create metrics using the default registry
+                from prometheus_client import REGISTRY
+                try:
+                    # Try to get existing metrics from registry
+                    RULE_VIOLATIONS = REGISTRY._names_to_collectors['vcenter_drs_rule_violations_total']
+                    COMPLIANCE_CHECK_DURATION = REGISTRY._names_to_collectors['vcenter_drs_compliance_check_duration_seconds']
+                except (KeyError, AttributeError):
+                    # Create new metrics if they don't exist
+                    RULE_VIOLATIONS = Gauge('vcenter_drs_rule_violations_total', 'Current rule violations by type', ['rule_type'])
+                    COMPLIANCE_CHECK_DURATION = Histogram('vcenter_drs_compliance_check_duration_seconds', 'Duration of compliance checks')
                 
                 # Record compliance check duration
                 duration = time.time() - start_time
