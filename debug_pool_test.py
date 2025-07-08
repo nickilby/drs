@@ -45,8 +45,8 @@ print("=== Testing Pool Anti-Affinity Logic ===")
 # Test data from the failing test
 rules = [{"type": "pool-anti-affinity", "level": "storage", "role": ["WEB"], "pool_pattern": ["HQS"]}]
 vms = {
-    1: {"name": "z-alias-WEB1", "host_id": 1, "dataset_id": 1, "dataset_name": "HQS1DAT1", "power_status": "poweredon"},
-    2: {"name": "z-alias-WEB2", "host_id": 1, "dataset_id": 2, "dataset_name": "HQS1DAT2", "power_status": "poweredon"},
+    1: {"name": "z-alias-WEB1", "host_id": 1, "dataset_id": 1, "dataset_name": "HQS1WEB1", "power_status": "poweredon"},
+    2: {"name": "z-alias-WEB2", "host_id": 1, "dataset_id": 2, "dataset_name": "HQS1WEB2", "power_status": "poweredon"},
 }
 
 print(f"Rules: {rules}")

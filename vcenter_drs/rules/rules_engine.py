@@ -35,11 +35,14 @@ def extract_pool_from_dataset(dataset_name):
     """
     Extract ZFS pool name from dataset name.
     
-    Generic pattern that handles various pool naming conventions:
-    - HQS1DAT1 -> hqs1
-    - HQS2WEB1 -> hqs2
-    - L1DAT1 -> l1
-    - M1S2TRA1 -> m1s2
+    Naming scheme: <location><device><type><number>
+    Pool is all leading <letters><numbers> pairs (e.g., L1S1 from L1S1TRA2), stopping before the <type><number> at the end.
+    
+    Examples:
+    - HQS2DAT1 -> hqs2
+    - L1S1TRA2 -> l1s1
+    - M1S2WEB1 -> m1s2
+    
     - M1S4WEB1 -> m1s4
     - POOL5DAT1 -> pool5
     - STORAGE10WEB1 -> storage10
@@ -53,10 +56,8 @@ def extract_pool_from_dataset(dataset_name):
     if not dataset_name:
         return None
     
-    # Pattern: Extract letters followed by numbers (the pool name)
-    # This handles: HQS1, L1, M1S2, M1S4, POOL5, STORAGE10, etc.
-    # For HQS1DAT1, we want to extract just HQS1, not HQS1DAT1
-    match = re.match(r'^([A-Z]+[0-9]+)', dataset_name, re.IGNORECASE)
+    # Match all leading <letters><numbers> pairs, stopping before <type><number> at the end
+    match = re.match(r'^((?:[A-Z]+[0-9]+)+)[A-Z]{3,}[0-9]+$', dataset_name, re.IGNORECASE)
     if match:
         return match.group(1).lower()
     
