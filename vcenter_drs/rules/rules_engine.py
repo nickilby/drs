@@ -53,14 +53,12 @@ def extract_pool_from_dataset(dataset_name):
     if not dataset_name:
         return None
     
-    # Enhanced pattern: Extract letters followed by numbers, optionally followed by letters and numbers
+    # Pattern: Extract letters followed by numbers (the pool name)
     # This handles: HQS1, L1, M1S2, M1S4, POOL5, STORAGE10, etc.
-    match = re.match(r'^([A-Z]+)([0-9]+)([A-Z]+[0-9]+)?', dataset_name, re.IGNORECASE)
+    # For HQS1DAT1, we want to extract just HQS1, not HQS1DAT1
+    match = re.match(r'^([A-Z]+[0-9]+)', dataset_name, re.IGNORECASE)
     if match:
-        letters = match.group(1).lower()
-        numbers = match.group(2)
-        suffix = match.group(3).lower() if match.group(3) else ""
-        return f"{letters}{numbers}{suffix}"
+        return match.group(1).lower()
     
     return None
 
