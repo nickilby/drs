@@ -19,6 +19,15 @@ def parse_alias_and_role(vm_name):
     else:
         name = vm_name
 
+    # Special handling for CockroachDB naming pattern: z-cockroach-{cluster}-{node}
+    if name.startswith('cockroach-'):
+        # Extract cluster name from cockroach-{cluster}-{node}
+        parts = name.split('-')
+        if len(parts) >= 3:
+            alias = f"cockroach-{parts[1]}"  # cockroach-{cluster}
+            role = parts[2]  # {node}
+            return alias.lower(), role.upper()
+    
     # Remove trailing number (if any)
     match = re.match(r'(.+)-(\D+)(\d+)$', name)
     if match:
@@ -376,15 +385,29 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
             # Name-pattern-based pool anti-affinity
             if 'name_pattern' in rule:
                 name_pattern = rule['name_pattern']
-                pool_groups = defaultdict(list)
+                name_exclude_pattern = rule.get('name_exclude_pattern')
+                pool_alias_groups = defaultdict(list)
                 for vm_id, vm in vms.items():
-                    if name_pattern in vm['name']:
+                    # Check if VM name matches the pattern (support both simple and regex patterns)
+                    name_matches = False
+                    if '*' in name_pattern or '.*' in name_pattern:
+                        # Treat as regex pattern
+                        name_matches = bool(re.search(name_pattern, vm['name']))
+                    else:
+                        # Simple string pattern
+                        name_matches = name_pattern in vm['name']
+                    
+                    if name_matches:
+                        # If exclude pattern is specified, skip VMs that match it
+                        if name_exclude_pattern and name_exclude_pattern in vm['name']:
+                            continue
                         alias, vm_role = vm_alias_role[vm_id]
                         dataset_name = vm.get('dataset_name') or ''
                         pool_name = extract_pool_from_dataset(dataset_name)
                         if pool_name and any(pat.lower() in pool_name.lower() for pat in patterns):
-                            pool_groups[pool_name].append((vm_id, vm))
-                for pool, group in pool_groups.items():
+                            # Group by pool and alias (allow different aliases on same pool)
+                            pool_alias_groups[(pool_name, alias)].append((vm_id, vm))
+                for (pool, alias), group in pool_alias_groups.items():
                     if len(group) > 1:
                         cluster_ids = set(hosts[vm['host_id']]['cluster_id'] for vm_id, vm in group)
                         for cluster_id in cluster_ids:
@@ -394,6 +417,7 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                                 "Pool Anti-Affinity Violation",
                                 f"Rule: VMs with name containing '{name_pattern}' must NOT be on the same ZFS pool matching {patterns}",
                                 f"Pool: {pool}",
+                                f"Alias: {alias}",
                                 "VMs on this pool:",
                             ]
                             msg += [f"  - {name}" for name in vms_on_pool]
@@ -403,7 +427,7 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                             violation_obj = {
                                 "type": rule['type'],
                                 "rule": rule,
-                                "alias": None,
+                                "alias": alias,
                                 "affected_vms": vms_on_pool,
                                 "cluster": cluster_name,
                                 "violation_text": violation_text,

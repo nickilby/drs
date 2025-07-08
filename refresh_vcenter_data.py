@@ -22,14 +22,35 @@ try:
     from prometheus_client import Gauge, REGISTRY
     import logging
     
-    # Set up logging
+    # Set up logging with fallback for non-writable /var/log
+    log_handlers = [logging.StreamHandler()]
+    
+    # Try to write to /var/log, fall back to project directory if not writable
+    log_file_paths = [
+        '/var/log/vcenter-drs-refresh.log',
+        os.path.join(project_dir, 'vcenter-drs-refresh.log')
+    ]
+    
+    for log_path in log_file_paths:
+        try:
+            # Test if we can write to the directory
+            log_dir = os.path.dirname(log_path)
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir, exist_ok=True)
+            
+            # Test write access
+            with open(log_path, 'a') as f:
+                pass
+            
+            log_handlers.append(logging.FileHandler(log_path))
+            break
+        except (PermissionError, OSError):
+            continue
+    
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler('/var/log/vcenter-drs-refresh.log'),
-            logging.StreamHandler()
-        ]
+        handlers=log_handlers
     )
     
     def main():

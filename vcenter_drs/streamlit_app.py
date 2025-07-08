@@ -310,13 +310,45 @@ if page == "Compliance Dashboard":
                 with st.expander(expander_title, expanded=True):
                     st.code(violation["violation_text"])
                     st.write(f"**Rule Type:** {violation['type']}")
-                    st.write(f"**Alias:** {violation['alias']}")
+                    # Extract alias for display
+                    if violation['alias'] is not None:
+                        display_alias = violation['alias']
+                    elif violation['affected_vms']:
+                        # Extract alias from first VM name for CockroachDB pattern
+                        first_vm = violation['affected_vms'][0]
+                        if first_vm.startswith('z-cockroach-'):
+                            # Extract cluster name from z-cockroach-{cluster}-{node}
+                            parts = first_vm.split('-')
+                            if len(parts) >= 3:
+                                display_alias = f"cockroach-{parts[2]}"  # cockroach-{cluster}
+                            else:
+                                display_alias = first_vm
+                        else:
+                            display_alias = first_vm
+                    else:
+                        display_alias = 'unknown'
+                    st.write(f"**Alias:** {display_alias}")
                     st.write(f"**Affected VMs:** {', '.join(violation['affected_vms'])}")
 
                     if st.button("Add Exception", key=f"add_exc_{cluster_name}_{idx}"):
                         import hashlib
-                        # Normalize fields for robust matching
-                        alias = (violation.get('alias') or '').strip().lower()
+                        # Normalize fields for robust matching - extract alias for name-pattern rules
+                        if violation.get('alias') is not None:
+                            alias = violation.get('alias').strip().lower()
+                        elif violation.get('affected_vms'):
+                            # Extract alias from first VM name for CockroachDB pattern
+                            first_vm = violation['affected_vms'][0]
+                            if first_vm.startswith('z-cockroach-'):
+                                # Extract cluster name from z-cockroach-{cluster}-{node}
+                                parts = first_vm.split('-')
+                                if len(parts) >= 3:
+                                    alias = f"cockroach-{parts[2]}".lower()  # cockroach-{cluster}
+                                else:
+                                    alias = first_vm.lower()
+                            else:
+                                alias = first_vm.lower()
+                        else:
+                            alias = 'unknown'
                         cluster = (violation.get('cluster') or '').strip().lower()
                         affected_vms = [vm.strip().lower() for vm in violation.get('affected_vms', [])]
                         relevant = {
@@ -339,10 +371,27 @@ if page == "Compliance Dashboard":
                             db.connect()
                             db.add_exception(exception_data)
                             db.close()
-                            st.success(f"Exception added for Alias: {violation.get('alias')} | Rule: {violation.get('type')}. This violation will be ignored in future checks.")
+                            st.success(f"Exception added for Alias: {alias} | Rule: {violation.get('type')}. This violation will be ignored in future checks.")
                         except Exception as e:
                             st.error(f"[ERROR] Failed to add exception: {e}")
-                    if st.button(f"Remediate/Fix for alias {violation['alias']}", key=f"remediate_fix_{violation['alias']}_{idx}"):
+                    # For name-pattern-based rules, extract alias from VM name
+                    if violation['alias'] is not None:
+                        alias_display = violation['alias']
+                    elif violation['affected_vms']:
+                        # Extract alias from first VM name for CockroachDB pattern
+                        first_vm = violation['affected_vms'][0]
+                        if first_vm.startswith('z-cockroach-'):
+                            # Extract cluster name from z-cockroach-{cluster}-{node}
+                            parts = first_vm.split('-')
+                            if len(parts) >= 3:
+                                alias_display = f"cockroach-{parts[2]}"  # cockroach-{cluster}
+                            else:
+                                alias_display = first_vm
+                        else:
+                            alias_display = first_vm
+                    else:
+                        alias_display = 'unknown'
+                    if st.button(f"Remediate/Fix for alias {alias_display}", key=f"remediate_fix_{cluster_name}_{idx}"):
                         token = st.session_state.get('remediation_token')
                         if not token:
                             st.error("You must authenticate first. Please log in via the sidebar to obtain a valid token before attempting remediation.")
@@ -353,7 +402,24 @@ if page == "Compliance Dashboard":
                                 playbook_name = 'e-vmotion-storage'
                             else:
                                 playbook_name = 'e-vmotion-server'
-                            success, msg = trigger_remediation_api(violation['alias'], violation['affected_vms'], token, playbook_name=playbook_name)
+                            # For name-pattern-based rules, extract alias from VM name
+                            if violation['alias'] is not None:
+                                alias = violation['alias']
+                            elif violation['affected_vms']:
+                                # Extract alias from first VM name for CockroachDB pattern
+                                first_vm = violation['affected_vms'][0]
+                                if first_vm.startswith('z-cockroach-'):
+                                    # Extract cluster name from z-cockroach-{cluster}-{node}
+                                    parts = first_vm.split('-')
+                                    if len(parts) >= 3:
+                                        alias = f"cockroach-{parts[2]}"  # cockroach-{cluster}
+                                    else:
+                                        alias = first_vm
+                                else:
+                                    alias = first_vm
+                            else:
+                                alias = 'unknown'
+                            success, msg = trigger_remediation_api(alias, violation['affected_vms'], token, playbook_name=playbook_name)
                             if success:
                                 st.success(msg)
                             else:

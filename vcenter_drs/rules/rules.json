@@ -118,7 +118,20 @@
   {
     "type": "pool-anti-affinity",
     "level": "storage",
-    "role": ["WEB", "LB", "CACHE", "v14-ES", "controller-", "keeper", "etcd-", "request-handler-lb", "utility", "redis", "broker"],
+    "role": ["WEB", "LB", "CACHE", "v14-ES","controller-", "keeper", "etcd-", "request-handler-lb", "utility", "redis", "broker"],
+    "pool_pattern": ["HQ", "L", "M"]
+  },
+  {
+    "type": "pool-anti-affinity",
+    "level": "storage",
+    "name_pattern": "z-cockroach-",
+    "name_exclude_pattern": "LB",
+    "pool_pattern": ["HQ", "L", "M"]
+  },
+  {
+    "type": "pool-anti-affinity",
+    "level": "storage",
+    "name_pattern": "z-cockroach-.*LB",
     "pool_pattern": ["HQ", "L", "M"]
   }
 ] 
