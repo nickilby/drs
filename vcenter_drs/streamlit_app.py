@@ -107,29 +107,44 @@ start_time = time.time()
 _, _, vms_db = get_db_state()
 vm_power_status = {vm['name']: str(vm.get('power_status') or '').lower() for vm in vms_db.values()}
 
-# Count violations by rule type (only if at least one affected VM is powered on)
-violation_counts: Dict[str, int] = defaultdict(int)
-if 'violations' in st.session_state and st.session_state['violations']:
-    for violation in st.session_state['violations']:
-        affected_vms = violation.get('affected_vms', [])
-        any_powered_on = any(vm_power_status.get(vm_name, '') == 'poweredon' for vm_name in affected_vms)
-        if any_powered_on:
-            rule_type = violation.get('type', 'unknown')
-            violation_counts[rule_type] += 1
+def update_violation_metrics(violations=None):
+    """Update Prometheus metrics based on current violations"""
+    # Load VM power status from DB
+    _, _, vms_db = get_db_state()
+    vm_power_status = {vm['name']: str(vm.get('power_status') or '').lower() for vm in vms_db.values()}
+    
+    # Count violations by rule type (only if at least one affected VM is powered on)
+    violation_counts: Dict[str, int] = defaultdict(int)
+    
+    # Use provided violations or fall back to session state
+    violations_to_check = violations if violations is not None else st.session_state.get('violations', [])
+    
+    if violations_to_check:
+        for violation in violations_to_check:
+            affected_vms = violation.get('affected_vms', [])
+            any_powered_on = any(vm_power_status.get(vm_name, '') == 'poweredon' for vm_name in affected_vms)
+            if any_powered_on:
+                rule_type = violation.get('type', 'unknown')
+                violation_counts[rule_type] += 1
 
-# Always ensure metrics exist by setting all known rule types to 0 first
-known_rule_types = ['anti-affinity', 'dataset-affinity', 'dataset-anti-affinity', 'affinity', 'pool-anti-affinity']
-for rule_type in known_rule_types:
-    RULE_VIOLATIONS.labels(rule_type=rule_type).set(0)
+    # Always ensure metrics exist by setting all known rule types to 0 first
+    known_rule_types = ['anti-affinity', 'dataset-affinity', 'dataset-anti-affinity', 'affinity', 'pool-anti-affinity']
+    for rule_type in known_rule_types:
+        RULE_VIOLATIONS.labels(rule_type=rule_type).set(0)
 
-# Then set the actual counts
-for rule_type, count in violation_counts.items():
-    RULE_VIOLATIONS.labels(rule_type=rule_type).set(count)
+    # Then set the actual counts
+    for rule_type, count in violation_counts.items():
+        RULE_VIOLATIONS.labels(rule_type=rule_type).set(count)
+
+# Initial metrics update
+update_violation_metrics()
 
 # Update uptime periodically
 def update_uptime():
     while True:
         UPTIME.set(time.time() - start_time)
+        # Also update violation metrics periodically
+        update_violation_metrics()
         time.sleep(60)  # Update every minute
 
 uptime_thread = threading.Thread(target=update_uptime, daemon=True)
@@ -279,6 +294,10 @@ if page == "Compliance Dashboard":
         # Use the new structured output
         structured_violations = evaluate_rules(selected_cluster if selected_cluster != "All Clusters" else None, return_structured=True)
         st.session_state['violations'] = structured_violations
+        
+        # Update Prometheus metrics with the new violations
+        update_violation_metrics(structured_violations)
+        
         if not structured_violations:
             st.success("✅ All VMs in this cluster are compliant! No violations found.")
             st.balloons()
@@ -625,6 +644,9 @@ if page == "Compliance Dashboard":
 
     # Only display violations if they exist in session state
     if st.session_state['violations']:
+        # Update Prometheus metrics with current violations
+        update_violation_metrics(st.session_state['violations'])
+        
         from collections import defaultdict
         
         # Group violations by cluster, then by (alias, rule_type) to combine related violations
