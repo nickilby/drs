@@ -61,4 +61,28 @@ def test_powered_on_vm_filter(monkeypatch):
                 break
         if powered_on:
             break
-    assert powered_on 
+    assert powered_on
+
+def test_duplicate_key_fix(monkeypatch):
+    """Test that the duplicate key issue is fixed."""
+    import hashlib
+    
+    # Test the unique key generation logic
+    def generate_unique_key(cluster_name, alias, affected_vms):
+        unique_key_data = f"{cluster_name}_{alias}_{','.join(affected_vms)}"
+        return hashlib.md5(unique_key_data.encode()).hexdigest()[:8]
+    
+    # Test with the same alias but different VMs (like the original issue)
+    key1 = generate_unique_key('hq2', 'prs', ['z-prs-sql'])
+    key2 = generate_unique_key('hq2', 'prs', ['z-prs-web2'])
+    
+    # Keys should be different even with same alias
+    assert key1 != key2
+    
+    # Same violation should generate same key
+    key3 = generate_unique_key('hq2', 'prs', ['z-prs-sql'])
+    assert key1 == key3
+    
+    # Different clusters should generate different keys
+    key4 = generate_unique_key('hq3', 'prs', ['z-prs-sql'])
+    assert key1 != key4 

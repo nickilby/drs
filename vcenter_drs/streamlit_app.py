@@ -324,7 +324,12 @@ if page == "Compliance Dashboard":
             st.write(f"**Alias:** {display_alias}")
             st.write(f"**Affected VMs:** {', '.join(violation['affected_vms'])}")
 
-            if st.button("Add Exception", key=f"add_exc_{cluster_name}_{idx}"):
+            # Create a unique key for this single violation
+            import hashlib
+            unique_key_data = f"{cluster_name}_{display_alias}_{','.join(violation['affected_vms'])}"
+            unique_key_hash = hashlib.md5(unique_key_data.encode()).hexdigest()[:8]
+
+            if st.button("Add Exception", key=f"add_exc_{unique_key_hash}"):
                 import hashlib
                 # Normalize fields for robust matching - extract alias for name-pattern rules
                 if violation.get('alias') is not None:
@@ -385,7 +390,7 @@ if page == "Compliance Dashboard":
                     alias_display = first_vm
             else:
                 alias_display = 'unknown'
-            if st.button(f"Remediate/Fix for alias {alias_display}", key=f"remediate_fix_{cluster_name}_{idx}"):
+            if st.button(f"Remediate/Fix for alias {alias_display}", key=f"remediate_fix_{unique_key_hash}"):
                 token = st.session_state.get('remediation_token')
                 if not token:
                     st.error("You must authenticate first. Please log in via the sidebar to obtain a valid token before attempting remediation.")
@@ -472,16 +477,63 @@ if page == "Compliance Dashboard":
                     all_pools.add(pool_name)
                     break
         
-        # Create grouped violation text
-        combined_violation_text.append(f"Pool Anti-Affinity Violation (Grouped)")
-        combined_violation_text.append(f"Rule: VMs with name containing 'z-cockroach-' must NOT be on the same ZFS pool matching ['HQ', 'L', 'M']")
+        # Create grouped violation text based on actual rule type
+        rule_type = first_violation['type']
+        if rule_type == 'dataset-affinity':
+            combined_violation_text.append(f"Dataset Affinity Violation (Grouped)")
+            combined_violation_text.append(f"Rule: VMs must be on datasets matching specific patterns")
+        elif rule_type == 'dataset-anti-affinity':
+            combined_violation_text.append(f"Dataset Anti-Affinity Violation (Grouped)")
+            combined_violation_text.append(f"Rule: VMs must NOT be on the same dataset matching specific patterns")
+        elif rule_type == 'pool-anti-affinity':
+            combined_violation_text.append(f"Pool Anti-Affinity Violation (Grouped)")
+            combined_violation_text.append(f"Rule: VMs must NOT be on the same ZFS pool matching specific patterns")
+        elif rule_type == 'affinity':
+            combined_violation_text.append(f"Host Affinity Violation (Grouped)")
+            combined_violation_text.append(f"Rule: VMs must be on the same host")
+        elif rule_type == 'anti-affinity':
+            combined_violation_text.append(f"Host Anti-Affinity Violation (Grouped)")
+            combined_violation_text.append(f"Rule: VMs must NOT be on the same host")
+        else:
+            combined_violation_text.append(f"{rule_type.capitalize()} Violation (Grouped)")
+            combined_violation_text.append(f"Rule: {rule_type} rule violation")
+        
         combined_violation_text.append(f"Alias: {display_alias}")
-        combined_violation_text.append(f"Affected Pools: {', '.join(sorted(all_pools))}")
-        combined_violation_text.append("VMs affected across all pools:")
+        combined_violation_text.append(f"Affected VMs:")
         for vm in sorted(set(all_affected_vms)):
             combined_violation_text.append(f"  - {vm}")
+        
+        # Add rule-specific information
+        if rule_type in ['dataset-affinity', 'dataset-anti-affinity']:
+            # Extract dataset information from violation text
+            all_datasets = set()
+            for violation in grouped_violations:
+                violation_lines = violation['violation_text'].split('\n')
+                for line in violation_lines:
+                    if line.startswith('Dataset: '):
+                        dataset_name = line.replace('Dataset: ', '').strip()
+                        all_datasets.add(dataset_name)
+                        break
+            if all_datasets:
+                combined_violation_text.append(f"Affected Datasets: {', '.join(sorted(all_datasets))}")
+        
+        if rule_type == 'pool-anti-affinity':
+            combined_violation_text.append(f"Affected Pools: {', '.join(sorted(all_pools))}")
+        
         combined_violation_text.append("Suggestions:")
-        combined_violation_text.append("  - Move VMs to distribute them across different pools")
+        if rule_type in ['dataset-affinity', 'dataset-anti-affinity']:
+            combined_violation_text.append("  - Move VMs to appropriate datasets")
+        elif rule_type == 'pool-anti-affinity':
+            combined_violation_text.append("  - Move VMs to distribute them across different pools")
+        elif rule_type in ['affinity', 'anti-affinity']:
+            combined_violation_text.append("  - Move VMs to appropriate hosts")
+        else:
+            combined_violation_text.append("  - Review and fix rule violation")
+        
+        # Create a unique key for this grouped violation set
+        import hashlib
+        unique_key_data = f"{cluster_name}_{display_alias}_{','.join(sorted(set(all_affected_vms)))}"
+        unique_key_hash = hashlib.md5(unique_key_data.encode()).hexdigest()[:8]
         
         expander_title = f"Alias: {display_alias} | Rule: {first_violation['type']} (Grouped - {len(grouped_violations)} violations)"
         with st.expander(expander_title, expanded=True):
@@ -492,7 +544,7 @@ if page == "Compliance Dashboard":
             st.write(f"**Affected Pools:** {', '.join(sorted(all_pools))}")
             st.write(f"**Number of Violations:** {len(grouped_violations)}")
 
-            if st.button("Add Exception", key=f"add_exc_grouped_{cluster_name}_{display_alias}"):
+            if st.button("Add Exception", key=f"add_exc_grouped_{unique_key_hash}"):
                 import hashlib
                 # Use the same alias extraction logic
                 if first_violation.get('alias') is not None:
@@ -536,7 +588,7 @@ if page == "Compliance Dashboard":
                 except Exception as e:
                     st.error(f"[ERROR] Failed to add exception: {e}")
             
-            if st.button(f"Remediate/Fix for alias {display_alias} (Grouped)", key=f"remediate_fix_grouped_{cluster_name}_{display_alias}"):
+            if st.button(f"Remediate/Fix for alias {display_alias} (Grouped)", key=f"remediate_fix_grouped_{unique_key_hash}"):
                 token = st.session_state.get('remediation_token')
                 if not token:
                     st.error("You must authenticate first. Please log in via the sidebar to obtain a valid token before attempting remediation.")
