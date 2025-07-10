@@ -1236,47 +1236,50 @@ Number of Recommendations: {num_recommendations}
             # AI prediction section
             ai_selected_vm = st.selectbox("Select VM for AI prediction", ["(Select a VM)"] + vm_names, key="ai_vm")
             
+            # --- PATCH START: Prometheus cluster-aware host filtering ---
+            # Build {host_name: cluster_name} mapping from Prometheus
+            prometheus_host_clusters = {}
+            try:
+                response = requests.get("http://10.65.32.4:9090/api/v1/query?query=vmware_host_cpu_usage_average", timeout=10)
+                if response.status_code == 200:
+                    data = response.json()
+                    if data['status'] == 'success' and data['data']['result']:
+                        for result in data['data']['result']:
+                            host_name = result['metric'].get('host_name', '')
+                            cluster_name = result['metric'].get('cluster_name', '')
+                            if host_name:
+                                prometheus_host_clusters[host_name] = cluster_name
+            except Exception as e:
+                st.warning(f"⚠️ Could not fetch host cluster mapping from Prometheus: {e}")
+            # --- PATCH END ---
+            
             if ai_selected_vm and ai_selected_vm != "(Select a VM)":
-                # Get VM's cluster and available hosts
+                # Get VM's cluster
                 vm_cluster = None
-                available_hosts = []
                 selected_vm_data = None
-                
-                # Find the selected VM's cluster
                 for vm_id, vm_data in vms.items():
                     if vm_data['name'] == ai_selected_vm:
                         vm_cluster = vm_data.get('cluster', '')
                         selected_vm_data = vm_data
-                        
-
                         break
                 
-
-                
-                # Get hosts from the VM's cluster
+                # --- PATCH: Use Prometheus cluster mapping for host selection ---
+                available_hosts = []
                 if vm_cluster:
-                    cluster_hosts = []
-                    for host_id, host_data in hosts.items():
-                        if host_data.get('cluster', '') == vm_cluster:
-                            cluster_hosts.append(host_data['name'])
-                    
-                    # Filter to only include hosts that are in the real_hosts list
-                    available_hosts = [host for host in cluster_hosts if host in real_hosts]
-                    
+                    # Find hosts in Prometheus with matching cluster
+                    available_hosts = [host for host, cluster in prometheus_host_clusters.items() if cluster == vm_cluster]
                     if available_hosts:
                         st.info(f"🎯 Found {len(available_hosts)} hosts in VM's cluster ({vm_cluster}): {', '.join(available_hosts)}")
                     else:
                         st.warning(f"⚠️ No hosts from cluster '{vm_cluster}' found in Prometheus data. Using all available hosts.")
-                        available_hosts = real_hosts
+                        available_hosts = list(prometheus_host_clusters.keys())
                 else:
                     st.warning("⚠️ Could not determine VM's cluster. Using all available hosts.")
-                    available_hosts = real_hosts
-                
+                    available_hosts = list(prometheus_host_clusters.keys())
                 # Fallback if no real hosts available
                 if not available_hosts:
                     available_hosts = ["host-01.zengenti.com", "host-02.zengenti.com"]
                     st.warning("⚠️ No real hosts available. Using dummy hosts for demonstration.")
-                
                 # Show selected hosts (read-only for now)
                 st.write(f"**Hosts to analyze:** {', '.join(available_hosts)}")
                 st.info(f"📊 Will analyze {len(available_hosts)} hosts from VM's cluster for optimal placement")
@@ -1308,7 +1311,7 @@ Number of Recommendations: {num_recommendations}
                         
                         for host_name in available_hosts:
                             try:
-                                host_metrics = data_collector.get_host_performance_metrics(host_name)
+                                host_metrics = data_collector.get_host_metrics(host_name)
                                 
                                 if host_metrics:
                                     # Prepare features for AI models
@@ -1428,8 +1431,8 @@ Number of Recommendations: {num_recommendations}
                                     else:
                                         st.error("❌ Poor placement candidate - Avoid this host")
                                     
-                                    # Show feature importance if available
-                                    if st.checkbox(f"Show technical details for {pred['host_name']}", key=f"tech_{i}"):
+                                    # Show technical details in an expander (no page refresh)
+                                    with st.expander(f"🔧 Technical Details for {pred['host_name']}", expanded=False):
                                         st.json({
                                             'vm_metrics': pred['vm_metrics'],
                                             'host_metrics': pred['host_metrics'],
