@@ -54,22 +54,21 @@ class PrometheusDataCollector:
         """
         url = f"{self.config.get_prometheus_url()}/api/v1/query"
         
+        # Initialize query parameters
+        query_params: Dict[str, Any] = {'query': query}
+        
         if start_time and end_time:
             # Range query
             url = f"{self.config.get_prometheus_url()}/api/v1/query_range"
-            params = {
-                'query': query,
+            query_params.update({
                 'start': start_time.timestamp(),
                 'end': end_time.timestamp(),
                 'step': '60s'  # 1-minute intervals
-            }
-        else:
-            # Instant query
-            params = {'query': query}
+            })
         
         for attempt in range(self.config.prometheus.retry_attempts):
             try:
-                response = self.session.get(url, params=params, timeout=self.timeout)
+                response = self.session.get(url, params=query_params, timeout=self.timeout)
                 response.raise_for_status()
                 
                 data = response.json()
@@ -262,6 +261,51 @@ class PrometheusDataCollector:
         except Exception as e:
             self.logger.warning(f"Failed to get I/O for host {host_name}: {e}")
             metrics['io'] = 0.0
+        
+        return metrics
+    
+    def get_host_metrics(self, host_name: str) -> Dict[str, float]:
+        """
+        Get current performance metrics for a host (alias for get_host_performance_metrics).
+        
+        Args:
+            host_name: Name of the host
+            
+        Returns:
+            Dict with current metrics (cpu, ram, io, ready_time, vm_count)
+        """
+        metrics = self.get_host_performance_metrics(host_name)
+        
+        # Add additional metrics that might be missing
+        if 'ready_time' not in metrics:
+            # Try to get ready time
+            ready_query = f'vmware_host_cpu_ready_average{{host_name="{host_name}"}}'
+            try:
+                data = self._query_prometheus(ready_query)
+                if 'data' in data and 'result' in data['data'] and data['data']['result']:
+                    metrics['ready_time'] = float(data['data']['result'][0]['value'][1])
+                else:
+                    metrics['ready_time'] = 0.0
+            except Exception:
+                metrics['ready_time'] = 0.0
+        
+        if 'vm_count' not in metrics:
+            # Try to get VM count
+            vm_count_query = f'vmware_host_vm_count{{host_name="{host_name}"}}'
+            try:
+                data = self._query_prometheus(vm_count_query)
+                if 'data' in data and 'result' in data['data'] and data['data']['result']:
+                    metrics['vm_count'] = int(float(data['data']['result'][0]['value'][1]))
+                else:
+                    metrics['vm_count'] = 0
+            except Exception:
+                metrics['vm_count'] = 0
+        
+        # Ensure all required metrics are present
+        required_metrics = ['cpu_usage', 'ram_usage', 'io_usage', 'ready_time', 'vm_count']
+        for metric in required_metrics:
+            if metric not in metrics:
+                metrics[metric] = 0.0
         
         return metrics
     

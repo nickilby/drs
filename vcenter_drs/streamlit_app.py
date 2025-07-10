@@ -980,7 +980,7 @@ elif page == "AI Config":
                     time.sleep(1)  # Simulate connection test
                     if data_collector.test_connection():
                         st.success("✅ Prometheus connection successful")
-                        st.info(f"Connected to: {data_collector.current_url}")
+                        st.info(f"Connected to: {data_collector.config.get_prometheus_url()}")
                     else:
                         st.error("❌ Both Prometheus servers failed")
                         st.warning("Using simulated data for recommendations")
@@ -1142,7 +1142,7 @@ elif page == "AI Optimizer":
                 
                 recommendations = optimization_engine.generate_placement_recommendations(
                     selected_vm, 
-                    cluster_filter, 
+                    selected_cluster if selected_cluster != "All Clusters" else "", 
                     num_recommendations
                 )
                 
@@ -1300,7 +1300,7 @@ Number of Recommendations: {num_recommendations}
                         ai_progress.progress(33)
                         time.sleep(0.5)
                         
-                        vm_metrics = optimization_engine.get_vm_metrics(ai_selected_vm)
+                        vm_metrics = optimization_engine.get_vm_metrics(ai_selected_vm) if ai_selected_vm else {}
                         
                         # Stage 2: Collect host metrics
                         ai_status.text("Stage 2/3: Collecting host metrics...")

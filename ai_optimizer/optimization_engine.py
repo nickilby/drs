@@ -287,7 +287,7 @@ class OptimizationEngine:
             
             # Generate recommendations
             max_recs = max_recommendations or self.config.optimization.max_recommendations
-            recommendations = []
+            recommendations: List[Dict[str, Any]] = []
             
             for i, (host, score) in enumerate(adjusted_scores[:max_recs]):
                 # Calculate projected metrics
