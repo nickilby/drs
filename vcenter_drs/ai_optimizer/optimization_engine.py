@@ -48,26 +48,39 @@ class OptimizationEngine:
                                          num_recommendations: int = 5) -> List[Dict[str, Any]]:
         """Generate VM placement recommendations using AI models"""
         try:
+            print(f"Starting analysis for VM: {vm_name}")
+            
             # Get VM metrics
+            print(f"Collecting metrics for VM: {vm_name}")
             vm_metrics = self.data_collector.get_vm_metrics(vm_name, self.config.analysis.cpu_trend_hours)
+            print(f"VM metrics collected: CPU={vm_metrics.get('cpu_usage', 0):.1%}, RAM={vm_metrics.get('ram_usage', 0):.1%}")
             
             # Get available hosts (simulated for now)
+            print(f"Analyzing available hosts (cluster filter: {cluster_filter})")
             available_hosts = self._get_available_hosts(cluster_filter)
+            print(f"Found {len(available_hosts)} available hosts")
             
             if not available_hosts:
+                print("No available hosts found")
                 return []
             
             recommendations = []
+            print(f"Evaluating {len(available_hosts)} hosts for placement...")
             
-            for host_name in available_hosts:
+            for i, host_name in enumerate(available_hosts):
+                print(f"Analyzing host {i+1}/{len(available_hosts)}: {host_name}")
+                
                 # Get current host metrics
                 current_metrics = self.data_collector.get_host_metrics(host_name, self.config.analysis.cpu_trend_hours)
+                print(f"  Current host metrics: CPU={current_metrics.get('cpu_usage', 0):.1%}, RAM={current_metrics.get('ram_usage', 0):.1%}, VMs={current_metrics.get('vm_count', 0)}")
                 
                 # Calculate projected metrics after VM placement
                 projected_metrics = self._calculate_projected_metrics(current_metrics, vm_metrics)
+                print(f"  Projected metrics: CPU={projected_metrics.get('cpu_usage', 0):.1%}, RAM={projected_metrics.get('ram_usage', 0):.1%}")
                 
                 # Calculate optimization score
                 score = self._calculate_optimization_score(current_metrics, projected_metrics, vm_metrics)
+                print(f"  Optimization score: {score:.3f}")
                 
                 # Generate reasoning
                 reasoning = self._generate_reasoning(current_metrics, projected_metrics, vm_metrics, score)
@@ -83,10 +96,14 @@ class OptimizationEngine:
                 }
                 
                 recommendations.append(recommendation)
+                print(f"  Recommendation added for {host_name} with score {score:.3f}")
             
             # Sort by score (higher is better) and limit to requested number
             recommendations.sort(key=lambda x: x['score'], reverse=True)
-            return recommendations[:num_recommendations]
+            final_recommendations = recommendations[:num_recommendations]
+            print(f"Generated {len(final_recommendations)} recommendations")
+            
+            return final_recommendations
             
         except Exception as e:
             print(f"Failed to generate recommendations: {e}")
