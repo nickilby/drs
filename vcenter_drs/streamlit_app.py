@@ -2,12 +2,12 @@ import streamlit as st
 import sys
 import os
 from typing import Dict, Any
-from api.collect_and_store_metrics import main as collect_and_store_metrics_main
-from rules.rules_engine import evaluate_rules, get_db_state, load_rules, parse_alias_and_role
+from vcenter_drs.api.collect_and_store_metrics import main as collect_and_store_metrics_main
+from vcenter_drs.rules.rules_engine import evaluate_rules, get_db_state, load_rules, parse_alias_and_role
 import time
 import threading
 from collections import defaultdict
-from db.metrics_db import MetricsDB
+from vcenter_drs.db.metrics_db import MetricsDB
 import json
 from prometheus_client import start_http_server, Gauge, Counter, Histogram, REGISTRY
 import atexit
@@ -1018,10 +1018,77 @@ elif page == "AI Optimizer":
         
         st.success("✅ AI Optimizer loaded successfully")
         
-        # Get available VMs and clusters
+        # Load trained AI models
+        import joblib
+        import json
+        import numpy as np
+        
+        models_dir = "ai_optimizer/models"
+        trained_models = {}
+        model_scalers = {}
+        model_performance = {}
+        
+        # Load model performance data
+        try:
+            results_path = os.path.join(models_dir, "training_results.json")
+            if os.path.exists(results_path):
+                with open(results_path, 'r') as f:
+                    model_performance = json.load(f)
+                st.success("✅ Trained AI models loaded successfully")
+                
+                # Display model performance
+                with st.expander("📊 AI Model Performance", expanded=False):
+                    for model_name, metrics in model_performance.items():
+                        st.write(f"**{model_name.upper()}:**")
+                        st.write(f"  - R² Score: {metrics['r2']:.4f}")
+                        st.write(f"  - Mean Squared Error: {metrics['mse']:.4f}")
+                        st.write(f"  - Mean Absolute Error: {metrics['mae']:.4f}")
+            else:
+                st.warning("⚠️ No trained models found. Models will be trained on first use.")
+        except Exception as e:
+            st.warning(f"⚠️ Could not load model performance data: {e}")
+        
+        # Load trained models
+        try:
+            model_types = ['random_forest', 'gradient_boosting']
+            for model_type in model_types:
+                model_path = os.path.join(models_dir, f"{model_type}_model.pkl")
+                scaler_path = os.path.join(models_dir, f"{model_type}_scaler.pkl")
+                
+                if os.path.exists(model_path) and os.path.exists(scaler_path):
+                    trained_models[model_type] = joblib.load(model_path)
+                    model_scalers[model_type] = joblib.load(scaler_path)
+            
+            if trained_models:
+                st.success(f"✅ Loaded {len(trained_models)} trained AI models")
+            else:
+                st.warning("⚠️ No trained models available")
+        except Exception as e:
+            st.warning(f"⚠️ Could not load trained models: {e}")
+        
+        # Get available VMs from database and real hosts from Prometheus
         clusters, hosts, vms = get_db_state()
         vm_names = [vm['name'] for vm in vms.values()]
         cluster_names = list(clusters.values())
+        
+        # Get real host names from Prometheus data
+        try:
+            # Query Prometheus for available hosts
+            import requests
+            response = requests.get("http://10.65.32.4:9090/api/v1/query?query=vmware_host_cpu_usage_average", timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                if data['status'] == 'success' and data['data']['result']:
+                    # Extract unique host names from the results
+                    real_hosts = list(set([result['metric']['host_name'] for result in data['data']['result']]))
+                    st.info(f"📊 Found {len(real_hosts)} real hosts in Prometheus data")
+                else:
+                    real_hosts = []
+            else:
+                real_hosts = []
+        except Exception as e:
+            st.warning(f"⚠️ Could not fetch real hosts from Prometheus: {e}")
+            real_hosts = []
         
         st.header("VM Placement Recommendations")
         
@@ -1062,8 +1129,17 @@ elif page == "AI Optimizer":
                 progress_bar.progress(90)
                 time.sleep(0.5)
                 
-                # Get recommendations
-                cluster_filter = selected_cluster if selected_cluster != "All Clusters" else None
+                # Use real hosts if available, otherwise fall back to dummy hosts
+                if real_hosts:
+                    # Use a subset of real hosts for recommendations
+                    host_subset = real_hosts[:min(5, len(real_hosts))]  # Limit to 5 hosts
+                    cluster_filter = host_subset
+                    st.info(f"🎯 Using {len(host_subset)} real hosts from Prometheus data")
+                else:
+                    # Fall back to dummy hosts
+                    cluster_filter = ["host-01.zengenti.com", "host-02.zengenti.com"]
+                    st.warning("⚠️ Using dummy host data (real hosts unavailable)")
+                
                 recommendations = optimization_engine.generate_placement_recommendations(
                     selected_vm, 
                     cluster_filter, 
@@ -1095,14 +1171,15 @@ elif page == "AI Optimizer":
                                 st.subheader("Current Host Metrics")
                                 st.metric("CPU Usage", f"{rec['current_metrics']['cpu_usage']:.1%}")
                                 st.metric("RAM Usage", f"{rec['current_metrics']['ram_usage']:.1%}")
-                                st.metric("I/O Usage", f"{rec['current_metrics']['io_usage']:.1%}")
-                                st.metric("Ready Time", f"{rec['current_metrics']['ready_time']:.1%}")
+                                st.metric("Disk I/O Usage", f"{rec['current_metrics']['io_usage']:.1%}")
                                 st.metric("VM Count", rec['current_metrics']['vm_count'])
                             
                             with col2:
                                 st.subheader("Projected Metrics (After Placement)")
                                 st.metric("CPU Usage", f"{rec['projected_metrics']['cpu_usage']:.1%}")
                                 st.metric("RAM Usage", f"{rec['projected_metrics']['ram_usage']:.1%}")
+                                st.metric("Disk I/O Usage", f"{rec['projected_metrics'].get('io_usage', 0):.1%}")
+                                st.metric("VM Count", rec['projected_metrics']['vm_count'])
                             
                             st.subheader("VM Metrics")
                             col1, col2, col3, col4 = st.columns(4)
@@ -1111,9 +1188,18 @@ elif page == "AI Optimizer":
                             with col2:
                                 st.metric("RAM Usage", f"{rec['vm_metrics']['ram_usage']:.1%}")
                             with col3:
-                                st.metric("Ready Time", f"{rec['vm_metrics']['ready_time']:.1%}")
+                                # Display VM ready time as a performance indicator (lower is better)
+                                ready_time = rec['vm_metrics']['ready_time']
+                                if ready_time <= 0.1:
+                                    st.metric("Ready Time", "Excellent", delta="Optimal")
+                                elif ready_time <= 0.5:
+                                    st.metric("Ready Time", "Good", delta="Acceptable")
+                                elif ready_time <= 0.8:
+                                    st.metric("Ready Time", "Moderate", delta="Consider alternatives")
+                                else:
+                                    st.metric("Ready Time", "Poor", delta="Avoid placement")
                             with col4:
-                                st.metric("I/O Usage", f"{rec['vm_metrics']['io_usage']:.1%}")
+                                st.metric("Disk I/O Usage", f"{rec['vm_metrics']['io_usage']:.1%}")
                             
                             st.subheader("AI Reasoning")
                             st.info(rec['reasoning'])
@@ -1141,6 +1227,215 @@ VM: {selected_vm}
 Cluster Filter: {cluster_filter}
 Number of Recommendations: {num_recommendations}
                     """)
+        
+        # AI Model Predictions section
+        if trained_models:
+            st.header("🤖 AI Model Predictions")
+            st.write("Get predictions from trained AI models for VM placement optimization.")
+            
+            # AI prediction section
+            ai_selected_vm = st.selectbox("Select VM for AI prediction", vm_names, key="ai_vm")
+            
+            # Get VM's cluster and available hosts
+            vm_cluster = None
+            available_hosts = []
+            
+            # Find the selected VM's cluster
+            for vm_id, vm_data in vms.items():
+                if vm_data['name'] == ai_selected_vm:
+                    vm_cluster = vm_data.get('cluster', '')
+                    break
+            
+            # Get hosts from the VM's cluster
+            if vm_cluster:
+                cluster_hosts = []
+                for host_id, host_data in hosts.items():
+                    if host_data.get('cluster', '') == vm_cluster:
+                        cluster_hosts.append(host_data['name'])
+                
+                # Filter to only include hosts that are in the real_hosts list
+                available_hosts = [host for host in cluster_hosts if host in real_hosts]
+                
+                if available_hosts:
+                    st.info(f"🎯 Found {len(available_hosts)} hosts in VM's cluster ({vm_cluster}): {', '.join(available_hosts)}")
+                else:
+                    st.warning(f"⚠️ No hosts from cluster '{vm_cluster}' found in Prometheus data. Using all available hosts.")
+                    available_hosts = real_hosts
+            else:
+                st.warning("⚠️ Could not determine VM's cluster. Using all available hosts.")
+                available_hosts = real_hosts
+            
+            # Fallback if no real hosts available
+            if not available_hosts:
+                available_hosts = ["host-01.zengenti.com", "host-02.zengenti.com"]
+                st.warning("⚠️ No real hosts available. Using dummy hosts for demonstration.")
+            
+            # Show selected hosts (read-only for now)
+            st.write(f"**Hosts to analyze:** {', '.join(available_hosts)}")
+            st.info(f"📊 Will analyze {len(available_hosts)} hosts from VM's cluster for optimal placement")
+            
+            if st.button("Get AI Predictions", key="ai_predict"):
+                if not available_hosts:
+                    st.warning("No hosts available for analysis.")
+                else:
+                    # Create progress indicators
+                    ai_progress = st.progress(0)
+                    ai_status = st.empty()
+                    
+                    try:
+                        # Stage 1: Collect VM metrics
+                        ai_status.text("Stage 1/3: Collecting VM metrics...")
+                        ai_progress.progress(33)
+                        time.sleep(0.5)
+                        
+                        vm_metrics = optimization_engine.get_vm_metrics(ai_selected_vm)
+                        
+                        # Stage 2: Collect host metrics
+                        ai_status.text("Stage 2/3: Collecting host metrics...")
+                        ai_progress.progress(66)
+                        time.sleep(0.5)
+                        
+                        host_predictions = []
+                        
+                        for host_name in available_hosts:
+                            try:
+                                host_metrics = data_collector.get_host_performance_metrics(host_name)
+                                
+                                if host_metrics:
+                                    # Prepare features for AI models
+                                    projected_cpu_usage = min(1.0, host_metrics.get('cpu_usage', 0.0) + vm_metrics.get('cpu_usage', 0.0))
+                                    projected_ram_usage = min(1.0, host_metrics.get('ram_usage', 0.0) + vm_metrics.get('ram_usage', 0.0))
+                                    projected_io_usage = min(1.0, host_metrics.get('io_usage', 0.0) + vm_metrics.get('io_usage', 0.0))
+                                    projected_vm_count = host_metrics.get('vm_count', 0) + 1
+                                    
+                                    # Create feature vector
+                                    feature_vector = [
+                                        vm_metrics.get('cpu_usage', 0.0),
+                                        vm_metrics.get('ram_usage', 0.0),
+                                        vm_metrics.get('ready_time', 0.0),
+                                        vm_metrics.get('io_usage', 0.0),
+                                        vm_metrics.get('cpu_mhz', 0.0),
+                                        vm_metrics.get('ram_mb', 0.0),
+                                        host_metrics.get('cpu_usage', 0.0),
+                                        host_metrics.get('ram_usage', 0.0),
+                                        host_metrics.get('io_usage', 0.0),
+                                        host_metrics.get('ready_time', 0.0),
+                                        host_metrics.get('vm_count', 0),
+                                        host_metrics.get('cpu_max_mhz', 40000),
+                                        host_metrics.get('ram_max_mb', 65536),
+                                        projected_cpu_usage,
+                                        projected_ram_usage,
+                                        projected_io_usage,
+                                        projected_vm_count
+                                    ]
+                                    
+                                    # Get predictions from each model
+                                    predictions = {}
+                                    for model_name, model in trained_models.items():
+                                        if model_name in model_scalers:
+                                            scaler = model_scalers[model_name]
+                                            features_scaled = scaler.transform([feature_vector])
+                                            prediction = model.predict(features_scaled)[0]
+                                            predictions[model_name] = max(0.0, min(1.0, prediction))
+                                    
+                                    # Calculate ensemble prediction
+                                    if len(predictions) > 1:
+                                        ensemble_score = sum(predictions.values()) / len(predictions)
+                                        predictions['ensemble'] = ensemble_score
+                                    
+                                    host_predictions.append({
+                                        'host_name': host_name,
+                                        'predictions': predictions,
+                                        'host_metrics': host_metrics,
+                                        'vm_metrics': vm_metrics,
+                                        'projected_metrics': {
+                                            'cpu_usage': projected_cpu_usage,
+                                            'ram_usage': projected_ram_usage,
+                                            'io_usage': projected_io_usage,
+                                            'vm_count': projected_vm_count
+                                        }
+                                    })
+                                    
+                            except Exception as e:
+                                st.warning(f"Could not get metrics for host {host_name}: {e}")
+                        
+                        # Stage 3: Display results
+                        ai_status.text("Stage 3/3: Generating AI predictions...")
+                        ai_progress.progress(100)
+                        time.sleep(0.5)
+                        ai_progress.empty()
+                        ai_status.empty()
+                        
+                        if host_predictions:
+                            st.success(f"✅ AI predictions generated for {len(host_predictions)} hosts")
+                            
+                            # Sort by best ensemble prediction
+                            best_model = 'ensemble' if 'ensemble' in host_predictions[0]['predictions'] else list(host_predictions[0]['predictions'].keys())[0]
+                            host_predictions.sort(key=lambda x: x['predictions'].get(best_model, 0), reverse=True)
+                            
+                            # Display predictions
+                            for i, pred in enumerate(host_predictions):
+                                with st.expander(f"🏠 {pred['host_name']} - AI Score: {pred['predictions'].get(best_model, 0):.3f}", expanded=(i==0)):
+                                    col1, col2 = st.columns(2)
+                                    
+                                    with col1:
+                                        st.subheader("Current Host Metrics")
+                                        st.metric("CPU Usage", f"{pred['host_metrics'].get('cpu_usage', 0):.1%}")
+                                        st.metric("RAM Usage", f"{pred['host_metrics'].get('ram_usage', 0):.1%}")
+                                        st.metric("I/O Usage", f"{pred['host_metrics'].get('io_usage', 0):.1%}")
+                                        st.metric("VM Count", pred['host_metrics'].get('vm_count', 0))
+                                    
+                                    with col2:
+                                        st.subheader("Projected Metrics")
+                                        st.metric("CPU Usage", f"{pred['projected_metrics']['cpu_usage']:.1%}")
+                                        st.metric("RAM Usage", f"{pred['projected_metrics']['ram_usage']:.1%}")
+                                        st.metric("I/O Usage", f"{pred['projected_metrics']['io_usage']:.1%}")
+                                        st.metric("VM Count", pred['projected_metrics']['vm_count'])
+                                    
+                                    st.subheader("AI Model Predictions")
+                                    col1, col2, col3 = st.columns(3)
+                                    
+                                    for j, (model_name, score) in enumerate(pred['predictions'].items()):
+                                        with col1 if j == 0 else col2 if j == 1 else col3:
+                                            # Color code based on score
+                                            if score >= 0.7:
+                                                st.metric(f"{model_name.upper()}", f"{score:.3f}", delta="Excellent")
+                                            elif score >= 0.5:
+                                                st.metric(f"{model_name.upper()}", f"{score:.3f}", delta="Good")
+                                            elif score >= 0.3:
+                                                st.metric(f"{model_name.upper()}", f"{score:.3f}", delta="Acceptable")
+                                            else:
+                                                st.metric(f"{model_name.upper()}", f"{score:.3f}", delta="Poor")
+                                    
+                                    # AI reasoning
+                                    st.subheader("AI Reasoning")
+                                    best_score = pred['predictions'].get(best_model, 0)
+                                    if best_score >= 0.7:
+                                        st.success("🎯 Excellent placement candidate - High confidence prediction")
+                                    elif best_score >= 0.5:
+                                        st.info("✅ Good placement candidate - Moderate confidence")
+                                    elif best_score >= 0.3:
+                                        st.warning("⚠️ Acceptable placement - Consider alternatives")
+                                    else:
+                                        st.error("❌ Poor placement candidate - Avoid this host")
+                                    
+                                    # Show feature importance if available
+                                    if st.checkbox(f"Show technical details for {pred['host_name']}", key=f"tech_{i}"):
+                                        st.json({
+                                            'vm_metrics': pred['vm_metrics'],
+                                            'host_metrics': pred['host_metrics'],
+                                            'projected_metrics': pred['projected_metrics'],
+                                            'ai_predictions': pred['predictions']
+                                        })
+                        else:
+                            st.warning("No predictions generated. Check data availability.")
+                            
+                    except Exception as e:
+                        st.error(f"❌ AI prediction failed: {e}")
+                        with st.expander("🔍 Debug Information"):
+                            st.code(f"Error: {e}")
+        else:
+            st.warning("⚠️ No trained AI models available. Train models first to enable AI predictions.")
         
         # Model training section
         st.header("Model Training")

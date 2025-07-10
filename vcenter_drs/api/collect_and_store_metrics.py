@@ -1,6 +1,6 @@
 from .vcenter_client_pyvomi import VCenterPyVmomiClient
 from pyVmomi import vim
-from db.metrics_db import MetricsDB
+from vcenter_drs.db.metrics_db import MetricsDB
 from datetime import datetime
 
 def get_perf_counter_id(perf_manager, counter_name):
