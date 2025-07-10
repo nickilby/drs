@@ -980,9 +980,9 @@ elif page == "AI Config":
                     time.sleep(1)  # Simulate connection test
                     if data_collector.test_connection():
                         st.success("✅ Prometheus connection successful")
-                        st.info(f"Connected to: {ai_config.prometheus.url}:{ai_config.prometheus.port}")
+                        st.info(f"Connected to: {data_collector.current_url}")
                     else:
-                        st.error("❌ Prometheus connection failed")
+                        st.error("❌ Both Prometheus servers failed")
                         st.warning("Using simulated data for recommendations")
         
         with col2:
@@ -996,6 +996,7 @@ elif page == "AI Config":
                     # Show additional status info
                     st.info(f"Models trained: {'✅ Yes' if summary['models_trained'] else '❌ No'}")
                     st.info(f"Prometheus connected: {'✅ Yes' if summary['prometheus_connected'] else '❌ No'}")
+                    st.info(f"Current server: {summary['current_prometheus_server']}")
         
     except ImportError as e:
         st.error(f"❌ Failed to import AI Optimizer modules: {e}")

@@ -17,8 +17,12 @@ class OptimizationEngine:
     
     def get_optimization_summary(self) -> Dict[str, Any]:
         """Get a summary of optimization configuration and status"""
+        prometheus_connected = self.data_collector.test_connection()
+        current_server = "None" if self.data_collector.use_simulated_data else self.data_collector.current_url
+        
         return {
-            "prometheus_connected": self.data_collector.test_connection(),
+            "prometheus_connected": prometheus_connected,
+            "current_prometheus_server": current_server,
             "models_trained": self.models_trained,
             "config": {
                 "prometheus_url": self.config.prometheus.url,

@@ -12,23 +12,39 @@ class PrometheusDataCollector:
     
     def __init__(self, config: AIConfig):
         self.config = config
-        self.base_url = f"{config.prometheus.url}:{config.prometheus.port}"
+        self.primary_url = f"{config.prometheus.url}:{config.prometheus.port}"
+        self.secondary_url = "http://10.65.32.4:9090"
+        self.current_url = self.primary_url
         self.use_simulated_data = False
     
     def test_connection(self) -> bool:
         """Test connection to Prometheus"""
+        # Try primary server first
         try:
-            # Use a shorter timeout for testing
-            response = requests.get(f"{self.base_url}/api/v1/status/config", 
+            response = requests.get(f"{self.primary_url}/api/v1/status/config", 
                                  timeout=5)  # 5 second timeout for testing
             if response.status_code == 200:
+                self.current_url = self.primary_url
                 self.use_simulated_data = False
+                print(f"Connected to primary Prometheus: {self.primary_url}")
+                return True
+        except Exception as e:
+            print(f"Primary Prometheus connection failed: {e}")
+        
+        # Try secondary server
+        try:
+            response = requests.get(f"{self.secondary_url}/api/v1/status/config", 
+                                 timeout=5)  # 5 second timeout for testing
+            if response.status_code == 200:
+                self.current_url = self.secondary_url
+                self.use_simulated_data = False
+                print(f"Connected to secondary Prometheus: {self.secondary_url}")
                 return True
             else:
                 self.use_simulated_data = True
                 return False
         except Exception as e:
-            print(f"Prometheus connection failed: {e}")
+            print(f"Secondary Prometheus connection failed: {e}")
             self.use_simulated_data = True
             return False
     
@@ -49,7 +65,7 @@ class PrometheusDataCollector:
             if end_time:
                 params['end'] = end_time
             
-            response = requests.get(f"{self.base_url}/api/v1/query", 
+            response = requests.get(f"{self.current_url}/api/v1/query", 
                                  params=params,
                                  timeout=min(self.config.prometheus.timeout, 10))
             
@@ -59,11 +75,11 @@ class PrometheusDataCollector:
                     return data['data']['result']
             return None
         except Exception as e:
-            print(f"Failed to get metric {query}: {e}")
+            print(f"Failed to get metric {query} from {self.current_url}: {e}")
             return None
     
     def _get_simulated_vm_metrics(self, vm_name: str) -> Dict[str, float]:
-        """Generate simulated VM metrics for testing"""
+        """Generate simulated VM metrics for testing (fallback only)"""
         # Generate realistic but varied metrics
         base_cpu = 0.2 + (hash(vm_name) % 100) / 1000.0  # 20-30% base CPU
         base_ram = 0.3 + (hash(vm_name) % 100) / 1000.0  # 30-40% base RAM
@@ -76,7 +92,7 @@ class PrometheusDataCollector:
         }
     
     def _get_simulated_host_metrics(self, host_name: str) -> Dict[str, float]:
-        """Generate simulated host metrics for testing"""
+        """Generate simulated host metrics for testing (fallback only)"""
         # Generate realistic host metrics
         base_cpu = 0.4 + (hash(host_name) % 100) / 1000.0  # 40-50% base CPU
         base_ram = 0.5 + (hash(host_name) % 100) / 1000.0  # 50-60% base RAM
@@ -92,7 +108,7 @@ class PrometheusDataCollector:
     def get_vm_metrics(self, vm_name: str, hours: int = 1) -> Dict[str, float]:
         """Get metrics for a specific VM"""
         if self.use_simulated_data:
-            print(f"Using simulated data for VM: {vm_name}")
+            print(f"Using simulated data for VM: {vm_name} (both Prometheus servers unavailable)")
             return self._get_simulated_vm_metrics(vm_name)
         
         end_time = int(time.time())
@@ -137,7 +153,7 @@ class PrometheusDataCollector:
     def get_host_metrics(self, host_name: str, hours: int = 1) -> Dict[str, float]:
         """Get metrics for a specific host"""
         if self.use_simulated_data:
-            print(f"Using simulated data for host: {host_name}")
+            print(f"Using simulated data for host: {host_name} (both Prometheus servers unavailable)")
             return self._get_simulated_host_metrics(host_name)
         
         end_time = int(time.time())
