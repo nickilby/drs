@@ -48,6 +48,24 @@ class OptimizationEngine:
             print(f"Model training failed: {e}")
             return False
     
+    def get_vm_metrics(self, vm_name: str) -> Dict[str, float]:
+        """Get VM metrics for AI prediction"""
+        try:
+            # Use the data collector to get VM metrics
+            vm_metrics = self.data_collector.get_vm_metrics(vm_name, self.config.analysis.cpu_trend_hours)
+            return vm_metrics
+        except Exception as e:
+            print(f"Failed to get VM metrics for {vm_name}: {e}")
+            # Return default metrics if collection fails
+            return {
+                'cpu_usage': 0.1,
+                'ram_usage': 0.1,
+                'io_usage': 0.05,
+                'ready_time': 0.1,
+                'cpu_mhz': 2000,
+                'ram_mb': 2048
+            }
+    
     def generate_placement_recommendations(self, vm_name: str, cluster_filter: Optional[str] = None, 
                                          num_recommendations: int = 5) -> List[Dict[str, Any]]:
         """Generate VM placement recommendations using AI models"""

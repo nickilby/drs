@@ -185,12 +185,21 @@ class MetricsDB:
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     name VARCHAR(255),
                     host_id INT,
+                    cluster_id INT,
                     dataset_id INT,
                     power_status VARCHAR(16) DEFAULT NULL,
                     FOREIGN KEY (host_id) REFERENCES hosts(id),
+                    FOREIGN KEY (cluster_id) REFERENCES clusters(id),
                     FOREIGN KEY (dataset_id) REFERENCES datasets(id)
                 ) ENGINE=InnoDB;
             ''')
+            
+            # Add cluster_id column to existing vms table if it doesn't exist
+            cursor.execute("SHOW COLUMNS FROM vms LIKE 'cluster_id'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE vms ADD COLUMN cluster_id INT AFTER host_id")
+                cursor.execute("ALTER TABLE vms ADD FOREIGN KEY (cluster_id) REFERENCES clusters(id)")
+                print("Added cluster_id column to vms table")
             
             # Create metrics table
             cursor.execute('''

@@ -1234,45 +1234,54 @@ Number of Recommendations: {num_recommendations}
             st.write("Get predictions from trained AI models for VM placement optimization.")
             
             # AI prediction section
-            ai_selected_vm = st.selectbox("Select VM for AI prediction", vm_names, key="ai_vm")
+            ai_selected_vm = st.selectbox("Select VM for AI prediction", ["(Select a VM)"] + vm_names, key="ai_vm")
             
-            # Get VM's cluster and available hosts
-            vm_cluster = None
-            available_hosts = []
-            
-            # Find the selected VM's cluster
-            for vm_id, vm_data in vms.items():
-                if vm_data['name'] == ai_selected_vm:
-                    vm_cluster = vm_data.get('cluster', '')
-                    break
-            
-            # Get hosts from the VM's cluster
-            if vm_cluster:
-                cluster_hosts = []
-                for host_id, host_data in hosts.items():
-                    if host_data.get('cluster', '') == vm_cluster:
-                        cluster_hosts.append(host_data['name'])
+            if ai_selected_vm and ai_selected_vm != "(Select a VM)":
+                # Get VM's cluster and available hosts
+                vm_cluster = None
+                available_hosts = []
+                selected_vm_data = None
                 
-                # Filter to only include hosts that are in the real_hosts list
-                available_hosts = [host for host in cluster_hosts if host in real_hosts]
+                # Find the selected VM's cluster
+                for vm_id, vm_data in vms.items():
+                    if vm_data['name'] == ai_selected_vm:
+                        vm_cluster = vm_data.get('cluster', '')
+                        selected_vm_data = vm_data
+                        
+
+                        break
                 
-                if available_hosts:
-                    st.info(f"🎯 Found {len(available_hosts)} hosts in VM's cluster ({vm_cluster}): {', '.join(available_hosts)}")
+
+                
+                # Get hosts from the VM's cluster
+                if vm_cluster:
+                    cluster_hosts = []
+                    for host_id, host_data in hosts.items():
+                        if host_data.get('cluster', '') == vm_cluster:
+                            cluster_hosts.append(host_data['name'])
+                    
+                    # Filter to only include hosts that are in the real_hosts list
+                    available_hosts = [host for host in cluster_hosts if host in real_hosts]
+                    
+                    if available_hosts:
+                        st.info(f"🎯 Found {len(available_hosts)} hosts in VM's cluster ({vm_cluster}): {', '.join(available_hosts)}")
+                    else:
+                        st.warning(f"⚠️ No hosts from cluster '{vm_cluster}' found in Prometheus data. Using all available hosts.")
+                        available_hosts = real_hosts
                 else:
-                    st.warning(f"⚠️ No hosts from cluster '{vm_cluster}' found in Prometheus data. Using all available hosts.")
+                    st.warning("⚠️ Could not determine VM's cluster. Using all available hosts.")
                     available_hosts = real_hosts
+                
+                # Fallback if no real hosts available
+                if not available_hosts:
+                    available_hosts = ["host-01.zengenti.com", "host-02.zengenti.com"]
+                    st.warning("⚠️ No real hosts available. Using dummy hosts for demonstration.")
+                
+                # Show selected hosts (read-only for now)
+                st.write(f"**Hosts to analyze:** {', '.join(available_hosts)}")
+                st.info(f"📊 Will analyze {len(available_hosts)} hosts from VM's cluster for optimal placement")
             else:
-                st.warning("⚠️ Could not determine VM's cluster. Using all available hosts.")
-                available_hosts = real_hosts
-            
-            # Fallback if no real hosts available
-            if not available_hosts:
-                available_hosts = ["host-01.zengenti.com", "host-02.zengenti.com"]
-                st.warning("⚠️ No real hosts available. Using dummy hosts for demonstration.")
-            
-            # Show selected hosts (read-only for now)
-            st.write(f"**Hosts to analyze:** {', '.join(available_hosts)}")
-            st.info(f"📊 Will analyze {len(available_hosts)} hosts from VM's cluster for optimal placement")
+                st.info("Please select a VM to see cluster and host analysis.")
             
             if st.button("Get AI Predictions", key="ai_predict"):
                 if not available_hosts:

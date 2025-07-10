@@ -82,13 +82,22 @@ def get_db_state():
     # Get hosts
     cursor.execute('SELECT * FROM hosts')
     hosts = {row['id']: {'name': row['name'], 'cluster_id': row['cluster_id']} for row in cursor.fetchall()}
-    # Get VMs (with dataset info and power status)
+    # Get VMs (with cluster, dataset info and power status)
     cursor.execute('''
-        SELECT v.id, v.name, v.host_id, v.dataset_id, d.name as dataset_name, v.power_status
+        SELECT v.id, v.name, v.host_id, v.cluster_id, v.dataset_id, d.name as dataset_name, v.power_status, c.name as cluster_name
         FROM vms v
         LEFT JOIN datasets d ON v.dataset_id = d.id
+        LEFT JOIN clusters c ON v.cluster_id = c.id
     ''')
-    vms = {row['id']: {'name': row['name'], 'host_id': row['host_id'], 'dataset_id': row['dataset_id'], 'dataset_name': row['dataset_name'], 'power_status': row['power_status']} for row in cursor.fetchall()}
+    vms = {row['id']: {
+        'name': row['name'], 
+        'host_id': row['host_id'], 
+        'cluster_id': row['cluster_id'],
+        'cluster': row['cluster_name'],
+        'dataset_id': row['dataset_id'], 
+        'dataset_name': row['dataset_name'], 
+        'power_status': row['power_status']
+    } for row in cursor.fetchall()}
     cursor.close()
     db.close()
     return clusters, hosts, vms

@@ -140,21 +140,22 @@ def main():
                             # Get power status
                             power_status = getattr(vm.runtime, 'powerState', None)
                             cursor.execute(
-                                "SELECT id, host_id, dataset_id, power_status FROM vms WHERE name = %s", (vm.name,)
+                                "SELECT id, host_id, cluster_id, dataset_id, power_status FROM vms WHERE name = %s", (vm.name,)
                             )
                             row = cursor.fetchone()
                             if row:
-                                vm_id, old_host_id, old_dataset_id, old_power_status = row
-                                # Update if host, dataset, or power_status changed
-                                if old_host_id != host_id or old_dataset_id != dataset_id or old_power_status != power_status:
+                                vm_id, old_host_id, old_cluster_id, old_dataset_id, old_power_status = row
+                                # Update if host, cluster, dataset, or power_status changed
+                                if (old_host_id != host_id or old_cluster_id != cluster_id or 
+                                    old_dataset_id != dataset_id or old_power_status != power_status):
                                     cursor.execute(
-                                        "UPDATE vms SET host_id = %s, dataset_id = %s, power_status = %s WHERE id = %s", 
-                                        (host_id, dataset_id, power_status, vm_id)
+                                        "UPDATE vms SET host_id = %s, cluster_id = %s, dataset_id = %s, power_status = %s WHERE id = %s", 
+                                        (host_id, cluster_id, dataset_id, power_status, vm_id)
                                     )
                             else:
                                 cursor.execute(
-                                    "INSERT INTO vms (name, host_id, dataset_id, power_status) VALUES (%s, %s, %s, %s)", 
-                                    (vm.name, host_id, dataset_id, power_status)
+                                    "INSERT INTO vms (name, host_id, cluster_id, dataset_id, power_status) VALUES (%s, %s, %s, %s, %s)", 
+                                    (vm.name, host_id, cluster_id, dataset_id, power_status)
                                 )
                                 vm_id = cursor.lastrowid
                             cpu = get_latest_metric(perf_manager, vm, cpu_id)
