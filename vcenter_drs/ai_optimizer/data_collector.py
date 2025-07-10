@@ -2,6 +2,7 @@
 
 import requests
 import time
+import random
 from typing import Dict, List, Optional, Any
 from .config import AIConfig
 
@@ -12,23 +13,35 @@ class PrometheusDataCollector:
     def __init__(self, config: AIConfig):
         self.config = config
         self.base_url = f"{config.prometheus.url}:{config.prometheus.port}"
+        self.use_simulated_data = False
     
     def test_connection(self) -> bool:
         """Test connection to Prometheus"""
         try:
+            # Use a shorter timeout for testing
             response = requests.get(f"{self.base_url}/api/v1/status/config", 
-                                 timeout=self.config.prometheus.timeout)
-            return response.status_code == 200
-        except Exception:
+                                 timeout=5)  # 5 second timeout for testing
+            if response.status_code == 200:
+                self.use_simulated_data = False
+                return True
+            else:
+                self.use_simulated_data = True
+                return False
+        except Exception as e:
+            print(f"Prometheus connection failed: {e}")
+            self.use_simulated_data = True
             return False
     
     def get_metric(self, query: str, start_time: Optional[str] = None, 
                    end_time: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
         """Get metric data from Prometheus"""
+        if self.use_simulated_data:
+            return None
+            
         try:
             params = {
                 'query': query,
-                'timeout': self.config.prometheus.timeout
+                'timeout': min(self.config.prometheus.timeout, 10)  # Cap at 10 seconds
             }
             
             if start_time:
@@ -38,18 +51,50 @@ class PrometheusDataCollector:
             
             response = requests.get(f"{self.base_url}/api/v1/query", 
                                  params=params,
-                                 timeout=self.config.prometheus.timeout)
+                                 timeout=min(self.config.prometheus.timeout, 10))
             
             if response.status_code == 200:
                 data = response.json()
                 if data['status'] == 'success':
                     return data['data']['result']
             return None
-        except Exception:
+        except Exception as e:
+            print(f"Failed to get metric {query}: {e}")
             return None
+    
+    def _get_simulated_vm_metrics(self, vm_name: str) -> Dict[str, float]:
+        """Generate simulated VM metrics for testing"""
+        # Generate realistic but varied metrics
+        base_cpu = 0.2 + (hash(vm_name) % 100) / 1000.0  # 20-30% base CPU
+        base_ram = 0.3 + (hash(vm_name) % 100) / 1000.0  # 30-40% base RAM
+        
+        return {
+            'cpu_usage': min(0.9, base_cpu + random.uniform(0, 0.3)),
+            'ram_usage': min(0.9, base_ram + random.uniform(0, 0.4)),
+            'ready_time': random.uniform(0.01, 0.05),  # 1-5% ready time
+            'io_usage': random.uniform(0.1, 0.6)  # 10-60% I/O usage
+        }
+    
+    def _get_simulated_host_metrics(self, host_name: str) -> Dict[str, float]:
+        """Generate simulated host metrics for testing"""
+        # Generate realistic host metrics
+        base_cpu = 0.4 + (hash(host_name) % 100) / 1000.0  # 40-50% base CPU
+        base_ram = 0.5 + (hash(host_name) % 100) / 1000.0  # 50-60% base RAM
+        
+        return {
+            'cpu_usage': min(0.9, base_cpu + random.uniform(0, 0.3)),
+            'ram_usage': min(0.9, base_ram + random.uniform(0, 0.3)),
+            'io_usage': random.uniform(0.2, 0.7),  # 20-70% I/O usage
+            'ready_time': random.uniform(0.01, 0.03),  # 1-3% ready time
+            'vm_count': random.randint(3, 12)  # 3-12 VMs per host
+        }
     
     def get_vm_metrics(self, vm_name: str, hours: int = 1) -> Dict[str, float]:
         """Get metrics for a specific VM"""
+        if self.use_simulated_data:
+            print(f"Using simulated data for VM: {vm_name}")
+            return self._get_simulated_vm_metrics(vm_name)
+        
         end_time = int(time.time())
         start_time = end_time - (hours * 3600)
         
@@ -91,6 +136,10 @@ class PrometheusDataCollector:
     
     def get_host_metrics(self, host_name: str, hours: int = 1) -> Dict[str, float]:
         """Get metrics for a specific host"""
+        if self.use_simulated_data:
+            print(f"Using simulated data for host: {host_name}")
+            return self._get_simulated_host_metrics(host_name)
+        
         end_time = int(time.time())
         start_time = end_time - (hours * 3600)
         

@@ -1,6 +1,7 @@
 """Optimization Engine for AI-powered VM placement"""
 
 import random
+import time
 from typing import Dict, List, Optional, Any
 from .config import AIConfig
 from .data_collector import PrometheusDataCollector
@@ -35,7 +36,6 @@ class OptimizationEngine:
             print(f"Training models with {len(vm_list)} VMs and {len(host_list)} hosts")
             
             # Simulate training time
-            import time
             time.sleep(1)
             
             self.models_trained = True
@@ -47,13 +47,26 @@ class OptimizationEngine:
     def generate_placement_recommendations(self, vm_name: str, cluster_filter: Optional[str] = None, 
                                          num_recommendations: int = 5) -> List[Dict[str, Any]]:
         """Generate VM placement recommendations using AI models"""
+        start_time = time.time()
+        max_execution_time = 30  # 30 seconds timeout
+        
         try:
             print(f"Starting analysis for VM: {vm_name}")
+            
+            # Check timeout
+            if time.time() - start_time > max_execution_time:
+                print("Analysis timeout - aborting")
+                return []
             
             # Get VM metrics
             print(f"Collecting metrics for VM: {vm_name}")
             vm_metrics = self.data_collector.get_vm_metrics(vm_name, self.config.analysis.cpu_trend_hours)
             print(f"VM metrics collected: CPU={vm_metrics.get('cpu_usage', 0):.1%}, RAM={vm_metrics.get('ram_usage', 0):.1%}")
+            
+            # Check timeout
+            if time.time() - start_time > max_execution_time:
+                print("Analysis timeout - aborting")
+                return []
             
             # Get available hosts (simulated for now)
             print(f"Analyzing available hosts (cluster filter: {cluster_filter})")
@@ -68,6 +81,11 @@ class OptimizationEngine:
             print(f"Evaluating {len(available_hosts)} hosts for placement...")
             
             for i, host_name in enumerate(available_hosts):
+                # Check timeout
+                if time.time() - start_time > max_execution_time:
+                    print("Analysis timeout - aborting")
+                    break
+                
                 print(f"Analyzing host {i+1}/{len(available_hosts)}: {host_name}")
                 
                 # Get current host metrics
