@@ -2,7 +2,7 @@
 
 import os
 import json
-from vcenter_drs.db.metrics_db import MetricsDB
+from db.metrics_db import MetricsDB
 from collections import defaultdict
 import re
 
