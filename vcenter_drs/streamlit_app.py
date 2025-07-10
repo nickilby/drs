@@ -1142,7 +1142,7 @@ elif page == "AI Optimizer":
                 
                 recommendations = optimization_engine.generate_placement_recommendations(
                     selected_vm, 
-                    selected_cluster if selected_cluster != "All Clusters" else "", 
+                    selected_cluster if selected_cluster != "All Clusters" else None, 
                     num_recommendations
                 )
                 
@@ -1264,7 +1264,7 @@ Number of Recommendations: {num_recommendations}
                         break
                 
                 # --- PATCH: Use Prometheus cluster mapping for host selection ---
-                available_hosts = []
+                available_hosts: List[str] = []
                 if vm_cluster:
                     # Find hosts in Prometheus with matching cluster
                     available_hosts = [host for host, cluster in prometheus_host_clusters.items() if cluster == vm_cluster]
@@ -1300,7 +1300,7 @@ Number of Recommendations: {num_recommendations}
                         ai_progress.progress(33)
                         time.sleep(0.5)
                         
-                        vm_metrics = optimization_engine.get_vm_metrics(ai_selected_vm) if ai_selected_vm else {}
+                        vm_metrics: Dict[str, float] = optimization_engine.get_vm_metrics(ai_selected_vm) if ai_selected_vm else {}
                         
                         # Stage 2: Collect host metrics
                         ai_status.text("Stage 2/3: Collecting host metrics...")

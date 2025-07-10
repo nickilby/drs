@@ -59,23 +59,23 @@ class OptimizationEngine:
             
             # Calculate averages
             metrics = {
-                'cpu_usage': np.mean([v for _, v in cpu_trend]) if cpu_trend else 0.0,
-                'ram_usage': np.mean([v for _, v in ram_trend]) if ram_trend else 0.0,
-                'ready_time': np.mean([v for _, v in ready_trend]) if ready_trend else 0.0,
-                'io_usage': np.mean([v for _, v in io_trend]) if io_trend else 0.0,
-                'storage_usage': np.mean([v for _, v in storage_trend]) if storage_trend else 0.0
+                'cpu_usage': float(np.mean([v for _, v in cpu_trend])) if cpu_trend else 0.0,
+                'ram_usage': float(np.mean([v for _, v in ram_trend])) if ram_trend else 0.0,
+                'ready_time': float(np.mean([v for _, v in ready_trend])) if ready_trend else 0.0,
+                'io_usage': float(np.mean([v for _, v in io_trend])) if io_trend else 0.0,
+                'storage_usage': float(np.mean([v for _, v in storage_trend])) if storage_trend else 0.0
             }
             
             # Add trend indicators
             if cpu_trend:
                 cpu_values = [v for _, v in cpu_trend]
-                metrics['cpu_trend'] = 'increasing' if cpu_values[-1] > cpu_values[0] else 'decreasing'
-                metrics['cpu_volatility'] = np.std(cpu_values)
+                metrics['cpu_trend'] = 1.0 if cpu_values[-1] > cpu_values[0] else 0.0
+                metrics['cpu_volatility'] = float(np.std(cpu_values))
             
             if ram_trend:
                 ram_values = [v for _, v in ram_trend]
-                metrics['ram_trend'] = 'increasing' if ram_values[-1] > ram_values[0] else 'decreasing'
-                metrics['ram_volatility'] = np.std(ram_values)
+                metrics['ram_trend'] = 1.0 if ram_values[-1] > ram_values[0] else 0.0
+                metrics['ram_volatility'] = float(np.std(ram_values))
             
             return metrics
             
@@ -87,13 +87,13 @@ class OptimizationEngine:
                 'ready_time': 0.0,
                 'io_usage': 0.0,
                 'storage_usage': 0.0,
-                'cpu_trend': 'stable',
-                'ram_trend': 'stable',
+                'cpu_trend': 0.0,
+                'ram_trend': 0.0,
                 'cpu_volatility': 0.0,
                 'ram_volatility': 0.0
             }
     
-    def get_host_candidates(self, cluster_name: str = None) -> List[Dict[str, Any]]:
+    def get_host_candidates(self, cluster_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get candidate hosts for VM placement.
         
@@ -195,7 +195,7 @@ class OptimizationEngine:
             host_scores = list(zip(hosts, scores))
             
             # Sort by score (descending)
-            host_scores.sort(key=lambda x: x[1], reverse=True)
+            host_scores.sort(key=lambda x: float(x[1]), reverse=True)
             
             return host_scores
             
@@ -245,13 +245,13 @@ class OptimizationEngine:
             
             adjusted_scores.append((host, adjusted_score))
         
-        # Re-sort by adjusted scores
-        adjusted_scores.sort(key=lambda x: x[1], reverse=True)
+                    # Re-sort by adjusted scores
+            adjusted_scores.sort(key=lambda x: float(x[1]), reverse=True)
         
         return adjusted_scores
     
-    def generate_placement_recommendations(self, vm_name: str, cluster_name: str = None, 
-                                         max_recommendations: int = None) -> List[Dict[str, Any]]:
+    def generate_placement_recommendations(self, vm_name: str, cluster_name: Optional[str] = None, 
+                                         max_recommendations: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Generate VM placement recommendations.
         
