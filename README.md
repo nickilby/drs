@@ -1,6 +1,6 @@
 # vCenter DRS Compliance Dashboard
 
-A comprehensive VMware vCenter compliance monitoring and optimization system that enforces VM placement rules based on affinity, anti-affinity, and dataset requirements.
+A comprehensive VMware vCenter compliance monitoring and optimization system that enforces VM placement rules based on affinity, anti-affinity, and dataset requirements, enhanced with **AI-powered VM placement optimization**.
 
 ## 🚀 Features
 
@@ -8,11 +8,34 @@ A comprehensive VMware vCenter compliance monitoring and optimization system tha
 - **Compliance Rules Engine**: Enforces complex VM placement rules
 - **Dataset Affinity**: Ensures VMs are placed on appropriate storage datastores
 - **Host Affinity/Anti-affinity**: Manages VM distribution across hosts
-- **Web Dashboard**: Streamlit-based UI for compliance monitoring
+- **🤖 AI-Powered VM Placement**: Machine learning optimization for optimal VM placement
+- **Web Dashboard**: Streamlit-based UI for compliance monitoring and AI optimization
 - **Automated Cleanup**: Removes stale VM records automatically
 - **Prometheus Metrics**: Exposes monitoring metrics for observability
 - **Systemd Service**: Runs as a system service with auto-restart
 - **Automated Data Collection**: Cron jobs for background data refresh
+
+## 🤖 AI Optimizer Features
+
+### **AI-Powered VM Placement**
+- **Machine Learning Models**: Random Forest and Neural Network models for placement optimization
+- **Performance-Based Recommendations**: Analyzes CPU, RAM, I/O, and ready time metrics
+- **Intelligent Scoring**: Ranks host candidates based on optimization criteria
+- **Trend Analysis**: Uses historical data to predict optimal placement
+- **Configurable Optimization**: Adjustable parameters for different environments
+
+### **AI Model Training**
+- **Automated Training**: Train models on current infrastructure data
+- **Prometheus Integration**: Uses real performance metrics for training
+- **Configurable Parameters**: Adjust training episodes, learning rate, batch size, and exploration rate
+- **Model Persistence**: Saves trained models for reuse
+- **Performance Monitoring**: Tracks model accuracy and performance
+
+### **AI Configuration Management**
+- **Persistent Settings**: Configuration saved to JSON file
+- **Real-time Updates**: Changes applied immediately after training
+- **Time Window Analysis**: Configurable analysis periods (1-24 hours for CPU, 1-7 days for storage)
+- **Optimization Parameters**: Adjustable ideal host usage ranges and priority weights
 
 ## 📋 Requirements
 
@@ -20,6 +43,8 @@ A comprehensive VMware vCenter compliance monitoring and optimization system tha
 - VMware vCenter Server
 - MySQL Database
 - Network access to vCenter APIs
+- **Prometheus Server** (for AI optimization features)
+- **PyTorch** (for neural network models)
 
 ## 🛠️ Installation
 
@@ -71,6 +96,65 @@ A comprehensive VMware vCenter compliance monitoring and optimization system tha
    streamlit run vcenter_drs/streamlit_app.py
    ```
 
+4. **Configure AI Optimizer:**
+   - Navigate to "AI Config" page
+   - Set Prometheus URL and analysis parameters
+   - Click "Save Configuration"
+   - Click "Train Models" to initialize AI models
+
+## 🤖 AI Optimizer Usage
+
+### **AI Configuration Page**
+Navigate to the "AI Config" page to configure AI optimization parameters:
+
+#### **Prometheus Configuration**
+- **Prometheus URL**: URL of your Prometheus server
+- **Port**: Prometheus port (default: 9090)
+- **Timeout**: Connection timeout in seconds
+- **Retry Attempts**: Number of connection retries
+
+#### **Analysis Windows**
+- **CPU Trend (hours)**: Historical CPU analysis period (1-24 hours)
+- **RAM Trend (hours)**: Historical RAM analysis period (1-24 hours)
+- **I/O Trend (days)**: Historical I/O analysis period (1-7 days)
+- **Storage Trend (days)**: Historical storage analysis period (1-7 days)
+- **Ready Time Window (hours)**: CPU ready time analysis period (1-24 hours)
+
+#### **Optimization Parameters**
+- **Ideal Host Usage Min/Max (%)**: Target host utilization range (30-70% recommended)
+- **Priority Weights**: CPU, RAM, Ready Time, and I/O priority weights
+- **Max Recommendations**: Maximum number of placement recommendations
+
+#### **ML Model Settings**
+- **Training Episodes**: Number of training cycles (1000-10000)
+- **Learning Rate**: Model learning speed (0.0001-0.1)
+- **Batch Size**: Training batch size (8-128)
+- **Exploration Rate**: Model exploration vs exploitation balance (0.01-0.5)
+
+### **AI Optimizer Page**
+Navigate to the "AI Optimizer" page to get VM placement recommendations:
+
+1. **Select VM**: Choose a VM for placement analysis
+2. **Set Cluster Filter**: Optionally filter by specific cluster
+3. **Generate Recommendations**: Click to get AI-powered placement suggestions
+
+#### **Recommendation Features**
+- **Host Ranking**: AI-scored host candidates
+- **Current Metrics**: Host performance before placement
+- **Projected Metrics**: Predicted performance after placement
+- **VM Metrics**: Detailed VM performance analysis
+- **AI Reasoning**: Human-readable explanation of recommendations
+- **Action Buttons**: Apply placement recommendations
+
+### **Model Training**
+Train AI models with current infrastructure data:
+
+1. **Configure Settings**: Set analysis windows and optimization parameters
+2. **Save Configuration**: Persist settings to JSON file
+3. **Train Models**: Click "Train Models" to build AI models
+4. **Monitor Progress**: Watch training progress and results
+5. **Use Recommendations**: Generate placement recommendations with trained models
+
 ## 🚀 Production Deployment
 
 ### Systemd Service (Recommended)
@@ -108,6 +192,8 @@ This creates two cron jobs:
 - **Cluster Filtering**: View violations for specific clusters
 - **Exception Management**: Add/remove compliance exceptions
 - **Rule Management**: View and manage compliance rules
+- **🤖 AI Optimizer**: Get AI-powered VM placement recommendations
+- **🤖 AI Config**: Configure AI optimization parameters
 
 ### Command Line
 ```bash
@@ -167,6 +253,42 @@ Edit `vcenter_drs/rules/rules.json` to define compliance rules:
 - **`affinity`**: Keeps VMs together on same host/cluster
 - **`anti-affinity`**: Prevents VMs from being on same host/cluster
 
+### AI Configuration
+AI settings are automatically saved to `ai_optimizer/custom_config.json`:
+
+```json
+{
+  "prometheus": {
+    "url": "http://prometheus.zengenti.com",
+    "port": 9090,
+    "timeout": 30,
+    "retry_attempts": 3
+  },
+  "analysis": {
+    "cpu_trend_hours": 24,
+    "ram_trend_hours": 6,
+    "io_trend_days": 2,
+    "storage_trend_days": 3,
+    "ready_time_window": 1
+  },
+  "optimization": {
+    "ideal_host_usage_min": 0.30,
+    "ideal_host_usage_max": 0.70,
+    "cpu_priority_weight": 0.6,
+    "ram_priority_weight": 1.0,
+    "ready_time_priority_weight": 0.8,
+    "io_priority_weight": 0.4,
+    "max_recommendations": 10
+  },
+  "ml": {
+    "training_episodes": 1000,
+    "learning_rate": 0.001,
+    "batch_size": 32,
+    "exploration_rate": 0.1
+  }
+}
+```
+
 ### Port Configuration
 - **Streamlit Dashboard**: Port 8080
 - **Prometheus Metrics**: Port 8081
@@ -185,6 +307,12 @@ vcenter_drs/
 ├── rules/                  # Compliance rules engine
 │   ├── rules_engine.py
 │   └── rules.json
+├── ai_optimizer/           # AI optimization engine
+│   ├── config.py          # AI configuration management
+│   ├── data_collector.py  # Prometheus data collection
+│   ├── ml_engine.py       # Machine learning models
+│   ├── optimization_engine.py # Main optimization logic
+│   └── exceptions.py      # AI-specific exceptions
 ├── streamlit_app.py        # Web dashboard
 ├── main.py                 # CLI entry point
 ├── refresh_vcenter_data.py # Automated data collection
@@ -200,6 +328,7 @@ The system tracks:
 - **Compliance Violations**: Rule violations by cluster
 - **Dataset Placement**: Storage datastore assignments
 - **Service Health**: Uptime and performance metrics
+- **🤖 AI Model Performance**: Training accuracy and prediction quality
 
 ### Log Files
 - **Service Logs**: `sudo journalctl -u vcenter-drs -f`
