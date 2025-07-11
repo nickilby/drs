@@ -2,7 +2,7 @@
 
 import os
 import json
-from db.metrics_db import MetricsDB
+from vcenter_drs.db.metrics_db import MetricsDB
 from collections import defaultdict
 import re
 
@@ -82,22 +82,13 @@ def get_db_state():
     # Get hosts
     cursor.execute('SELECT * FROM hosts')
     hosts = {row['id']: {'name': row['name'], 'cluster_id': row['cluster_id']} for row in cursor.fetchall()}
-    # Get VMs (with cluster, dataset info and power status)
+    # Get VMs (with dataset info and power status)
     cursor.execute('''
-        SELECT v.id, v.name, v.host_id, v.cluster_id, v.dataset_id, d.name as dataset_name, v.power_status, c.name as cluster_name
+        SELECT v.id, v.name, v.host_id, v.dataset_id, d.name as dataset_name, v.power_status
         FROM vms v
         LEFT JOIN datasets d ON v.dataset_id = d.id
-        LEFT JOIN clusters c ON v.cluster_id = c.id
     ''')
-    vms = {row['id']: {
-        'name': row['name'], 
-        'host_id': row['host_id'], 
-        'cluster_id': row['cluster_id'],
-        'cluster': row['cluster_name'],
-        'dataset_id': row['dataset_id'], 
-        'dataset_name': row['dataset_name'], 
-        'power_status': row['power_status']
-    } for row in cursor.fetchall()}
+    vms = {row['id']: {'name': row['name'], 'host_id': row['host_id'], 'dataset_id': row['dataset_id'], 'dataset_name': row['dataset_name'], 'power_status': row['power_status']} for row in cursor.fetchall()}
     cursor.close()
     db.close()
     return clusters, hosts, vms
@@ -145,8 +136,7 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
             continue
         roles = [rule['role']] if isinstance(rule['role'], str) else rule['role']
         for alias, vm_ids in alias_to_vm_ids.items():
-            # Deduplicate VM IDs to prevent duplicate entries in violations
-            group_vm_ids = list(set([vid for vid in vm_ids if vm_alias_role[vid][1] in roles]))
+            group_vm_ids = [vid for vid in vm_ids if vm_alias_role[vid][1] in roles]
             if len(group_vm_ids) < 2:
                 continue
             host_ids = set(vms[vid]['host_id'] for vid in group_vm_ids)
@@ -156,14 +146,12 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                 cluster_name = clusters[cluster_id]
                 if rule['type'] == 'affinity':
                     if rule['level'] == 'host' and len(host_ids) > 1:
-                        # Deduplicate VM names for display
-                        unique_vm_names = list(set([vms[vid]['name'] for vid in group_vm_ids]))
                         msg = [
                             "Affinity Violation",
                             f"Rule: {', '.join(roles)} VMs for alias '{alias}' should be on the same host",
                             "VMs found on different hosts:",
                         ]
-                        msg += [f"  - {vm_name}" for vm_name in sorted(unique_vm_names)]
+                        msg += [f"  - {vms[vid]['name']}" for vid in group_vm_ids]
                         msg.append("Suggestions:")
                         msg.append(f"  - Place all {', '.join(roles)} VMs for alias '{alias}' on the same host")
                         violation_text = "\n".join(msg)
@@ -171,7 +159,7 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                             "type": rule['type'],
                             "rule": rule,
                             "alias": alias,
-                            "affected_vms": unique_vm_names,
+                            "affected_vms": [vms[vid]['name'] for vid in group_vm_ids],
                             "cluster": cluster_name,
                             "violation_text": violation_text,
                             "level": rule.get('level', 'host')
@@ -181,14 +169,12 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                         cluster_violations[cluster_name].append(violation_text)
                         structured_violations.append(violation_obj)
                     elif rule['level'] == 'cluster' and len(cluster_ids) > 1:
-                        # Deduplicate VM names for display
-                        unique_vm_names = list(set([vms[vid]['name'] for vid in group_vm_ids]))
                         msg = [
                             "Affinity Violation",
                             f"Rule: {', '.join(roles)} VMs for alias '{alias}' should be in the same cluster",
                             "VMs found in different clusters:",
                         ]
-                        msg += [f"  - {vm_name}" for vm_name in sorted(unique_vm_names)]
+                        msg += [f"  - {vms[vid]['name']}" for vid in group_vm_ids]
                         msg.append("Suggestions:")
                         msg.append(f"  - Place all {', '.join(roles)} VMs for alias '{alias}' in the same cluster")
                         violation_text = "\n".join(msg)
@@ -354,7 +340,7 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
             # Role-based pool anti-affinity
             if 'role' in rule:
                 role = rule['role'].upper() if isinstance(rule['role'], str) else [r.upper() for r in rule['role']]
-                # Group VMs by pool, alias, and role combination (allow different roles on same pool)
+                # Group VMs by pool, alias, and role (allow different roles on same pool)
                 pool_alias_role_groups = defaultdict(list)
                 for vm_id, vm in vms.items():
                     alias, vm_role = vm_alias_role[vm_id]

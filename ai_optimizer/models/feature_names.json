@@ -1,0 +1,19 @@
+[
+  "vm_cpu_usage",
+  "vm_ram_usage",
+  "vm_ready_time",
+  "vm_io_usage",
+  "vm_cpu_mhz",
+  "vm_ram_mb",
+  "host_cpu_usage",
+  "host_ram_usage",
+  "host_io_usage",
+  "host_ready_time",
+  "host_vm_count",
+  "host_cpu_max_mhz",
+  "host_ram_max_mb",
+  "projected_cpu_usage",
+  "projected_ram_usage",
+  "projected_io_usage",
+  "projected_vm_count"
+]

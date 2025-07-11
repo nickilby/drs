@@ -11,6 +11,10 @@ WorkingDirectory=/home/headhoncho/drs
 Environment=PATH=/home/headhoncho/drs/venv/bin
 Environment=PYTHONPATH=/home/headhoncho/drs/venv/lib/python3.12/site-packages
 Environment=VIRTUAL_ENV=/home/headhoncho/drs/venv
+Environment=DB_HOST=
+Environment=DB_USER=
+Environment=DB_PASSWORD=
+Environment=DB_DATABASE=
 ExecStart=/usr/bin/python3 -m streamlit run vcenter_drs/streamlit_app.py --server.port 8080 --server.address 0.0.0.0
 Restart=always
 RestartSec=10
