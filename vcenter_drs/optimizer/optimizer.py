@@ -505,13 +505,13 @@ class VMOptimizer:
         
         # Calculate resource balance (lower variance is better)
         utilizations = [cpu_util, mem_util, net_util]
-        variance = np.var(utilizations)
+        variance = float(np.var(utilizations))
         
         # Score based on balance and overall utilization
         balance_score = max(0.0, 1.0 - variance * 2)  # Lower variance = higher score
         
         # Prefer moderate utilization (not too low, not too high)
-        avg_utilization = np.mean(utilizations)
+        avg_utilization = float(np.mean(utilizations))
         if 0.3 <= avg_utilization <= 0.7:
             utilization_score = 1.0
         elif avg_utilization < 0.3:

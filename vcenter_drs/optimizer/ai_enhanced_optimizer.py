@@ -512,8 +512,8 @@ class AIEnhancedVMOptimizer:
         
         # AI-specific scores
         anomaly_score = 1.0 - host_metrics.anomaly_score  # Lower anomaly = better
-        trend_score = np.mean(host_metrics.performance_trend[-6:])  # Recent trend
-        interference_score = 1.0 - np.mean(host_metrics.interference_signature)
+        trend_score = float(np.mean(host_metrics.performance_trend[-6:]))  # Recent trend
+        interference_score = 1.0 - float(np.mean(host_metrics.interference_signature))
         
         # Weighted combination
         scores['overall'] = (
