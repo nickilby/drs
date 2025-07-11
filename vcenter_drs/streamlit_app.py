@@ -926,54 +926,67 @@ elif page == "AI Config":
         from ai_optimizer.data_collector import PrometheusDataCollector
         from ai_optimizer.optimization_engine import OptimizationEngine
         
-        # Initialize AI components
+        # Load saved configuration first
+        config_file = "ai_optimizer/custom_config.json"
+        saved_config = {}
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, 'r') as f:
+                    saved_config = json.load(f)
+                st.success("📁 Loaded saved configuration")
+            except Exception as e:
+                st.warning(f"⚠️ Could not load saved configuration: {e}")
+        else:
+            st.info("📁 No saved configuration found - using defaults")
+        
+        # Initialize AI components with saved config
         ai_config = AIConfig()
         data_collector = PrometheusDataCollector(ai_config)
         optimization_engine = OptimizationEngine(ai_config, data_collector)
         
         st.success("✅ AI Optimizer modules loaded successfully")
         
-        # Configuration sections
+        # Configuration sections - use saved values or defaults
         st.header("Prometheus Configuration")
         col1, col2 = st.columns(2)
         with col1:
-            prometheus_url = st.text_input("Prometheus URL", value=ai_config.prometheus.url)
-            prometheus_port = st.number_input("Prometheus Port", value=ai_config.prometheus.port, min_value=1, max_value=65535)
+            prometheus_url = st.text_input("Prometheus URL", value=saved_config.get('prometheus', {}).get('url', ai_config.prometheus.url))
+            prometheus_port = st.number_input("Prometheus Port", value=saved_config.get('prometheus', {}).get('port', ai_config.prometheus.port), min_value=1, max_value=65535)
         with col2:
-            timeout = st.number_input("Timeout (seconds)", value=ai_config.prometheus.timeout, min_value=5, max_value=300)
-            retry_attempts = st.number_input("Retry Attempts", value=ai_config.prometheus.retry_attempts, min_value=1, max_value=10)
+            timeout = st.number_input("Timeout (seconds)", value=saved_config.get('prometheus', {}).get('timeout', ai_config.prometheus.timeout), min_value=5, max_value=300)
+            retry_attempts = st.number_input("Retry Attempts", value=saved_config.get('prometheus', {}).get('retry_attempts', ai_config.prometheus.retry_attempts), min_value=1, max_value=10)
         
         st.header("Analysis Windows")
         col1, col2, col3 = st.columns(3)
         with col1:
-            cpu_trend_hours = st.number_input("CPU Trend (hours)", value=ai_config.analysis.cpu_trend_hours, min_value=1, max_value=24)
-            storage_trend_days = st.number_input("Storage Trend (days)", value=ai_config.analysis.storage_trend_days, min_value=1, max_value=7)
+            cpu_trend_hours = st.number_input("CPU Trend (hours)", value=saved_config.get('analysis', {}).get('cpu_trend_hours', ai_config.analysis.cpu_trend_hours), min_value=1, max_value=24)
+            storage_trend_days = st.number_input("Storage Trend (days)", value=saved_config.get('analysis', {}).get('storage_trend_days', ai_config.analysis.storage_trend_days), min_value=1, max_value=7)
         with col2:
-            ram_trend_hours = st.number_input("RAM Trend (hours)", value=ai_config.analysis.ram_trend_hours, min_value=1, max_value=24)
-            io_trend_days = st.number_input("I/O Trend (days)", value=ai_config.analysis.io_trend_days, min_value=1, max_value=7)
+            ram_trend_hours = st.number_input("RAM Trend (hours)", value=saved_config.get('analysis', {}).get('ram_trend_hours', ai_config.analysis.ram_trend_hours), min_value=1, max_value=24)
+            io_trend_days = st.number_input("I/O Trend (days)", value=saved_config.get('analysis', {}).get('io_trend_days', ai_config.analysis.io_trend_days), min_value=1, max_value=7)
         with col3:
-            ready_time_window = st.number_input("Ready Time Window (hours)", value=ai_config.analysis.ready_time_window, min_value=1, max_value=24)
+            ready_time_window = st.number_input("Ready Time Window (hours)", value=saved_config.get('analysis', {}).get('ready_time_window', ai_config.analysis.ready_time_window), min_value=1, max_value=24)
         
         st.header("Optimization Parameters")
         col1, col2 = st.columns(2)
         with col1:
-            ideal_host_min = st.slider("Ideal Host Usage Min (%)", value=int(ai_config.optimization.ideal_host_usage_min * 100), min_value=10, max_value=90)
-            ideal_host_max = st.slider("Ideal Host Usage Max (%)", value=int(ai_config.optimization.ideal_host_usage_max * 100), min_value=10, max_value=90)
-            max_recommendations = st.number_input("Max Recommendations", value=ai_config.optimization.max_recommendations, min_value=1, max_value=20)
+            ideal_host_min = st.slider("Ideal Host Usage Min (%)", value=int(saved_config.get('optimization', {}).get('ideal_host_usage_min', ai_config.optimization.ideal_host_usage_min) * 100), min_value=10, max_value=90)
+            ideal_host_max = st.slider("Ideal Host Usage Max (%)", value=int(saved_config.get('optimization', {}).get('ideal_host_usage_max', ai_config.optimization.ideal_host_usage_max) * 100), min_value=10, max_value=90)
+            max_recommendations = st.number_input("Max Recommendations", value=saved_config.get('optimization', {}).get('max_recommendations', ai_config.optimization.max_recommendations), min_value=1, max_value=20)
         with col2:
-            cpu_weight = st.slider("CPU Priority Weight", value=float(ai_config.optimization.cpu_priority_weight), min_value=0.1, max_value=2.0, step=0.1)
-            ram_weight = st.slider("RAM Priority Weight", value=float(ai_config.optimization.ram_priority_weight), min_value=0.1, max_value=2.0, step=0.1)
-            ready_time_weight = st.slider("Ready Time Priority Weight", value=float(ai_config.optimization.ready_time_priority_weight), min_value=0.1, max_value=2.0, step=0.1)
-            io_weight = st.slider("I/O Priority Weight", value=float(ai_config.optimization.io_priority_weight), min_value=0.1, max_value=2.0, step=0.1)
+            cpu_weight = st.slider("CPU Priority Weight", value=saved_config.get('optimization', {}).get('cpu_priority_weight', ai_config.optimization.cpu_priority_weight), min_value=0.1, max_value=2.0, step=0.1)
+            ram_weight = st.slider("RAM Priority Weight", value=saved_config.get('optimization', {}).get('ram_priority_weight', ai_config.optimization.ram_priority_weight), min_value=0.1, max_value=2.0, step=0.1)
+            ready_time_weight = st.slider("Ready Time Priority Weight", value=saved_config.get('optimization', {}).get('ready_time_priority_weight', ai_config.optimization.ready_time_priority_weight), min_value=0.1, max_value=2.0, step=0.1)
+            io_weight = st.slider("I/O Priority Weight", value=saved_config.get('optimization', {}).get('io_priority_weight', ai_config.optimization.io_priority_weight), min_value=0.1, max_value=2.0, step=0.1)
         
         st.header("ML Model Settings")
         col1, col2 = st.columns(2)
         with col1:
-            training_episodes = st.number_input("Training Episodes", value=ai_config.ml.training_episodes, min_value=100, max_value=10000)
-            learning_rate = st.number_input("Learning Rate", value=ai_config.ml.learning_rate, min_value=0.0001, max_value=0.1, format="%.4f")
+            training_episodes = st.number_input("Training Episodes", value=saved_config.get('ml', {}).get('training_episodes', ai_config.ml.training_episodes), min_value=100, max_value=10000)
+            learning_rate = st.number_input("Learning Rate", value=saved_config.get('ml', {}).get('learning_rate', ai_config.ml.learning_rate), min_value=0.0001, max_value=0.1, format="%.4f")
         with col2:
-            batch_size = st.number_input("Batch Size", value=ai_config.ml.batch_size, min_value=8, max_value=128)
-            exploration_rate = st.slider("Exploration Rate", value=ai_config.ml.exploration_rate, min_value=0.01, max_value=0.5, step=0.01)
+            batch_size = st.number_input("Batch Size", value=saved_config.get('ml', {}).get('batch_size', ai_config.ml.batch_size), min_value=8, max_value=128)
+            exploration_rate = st.slider("Exploration Rate", value=saved_config.get('ml', {}).get('exploration_rate', ai_config.ml.exploration_rate), min_value=0.01, max_value=0.5, step=0.01)
         
         # Save configuration button
         if st.button("Save Configuration"):
@@ -1021,18 +1034,6 @@ elif page == "AI Config":
                 
             except Exception as e:
                 st.error(f"❌ Failed to save configuration: {e}")
-        
-        # Load saved configuration
-        config_file = "ai_optimizer/custom_config.json"
-        if os.path.exists(config_file):
-            try:
-                with open(config_file, 'r') as f:
-                    saved_config = json.load(f)
-                st.info("📁 Loaded saved configuration")
-            except Exception as e:
-                st.warning(f"⚠️ Could not load saved configuration: {e}")
-        else:
-            st.info("📁 No saved configuration found - using defaults")
         
         # Train Models button (conveniently placed on config page)
         st.header("Model Training")
@@ -1097,6 +1098,13 @@ elif page == "AI Config":
 elif page == "AI Optimizer":
     st.title("AI VM Placement Optimizer")
     st.write("Get AI-powered VM placement recommendations based on performance metrics and optimization criteria.")
+    
+    # Check if custom configuration exists
+    config_file = "ai_optimizer/custom_config.json"
+    if os.path.exists(config_file):
+        st.info("📁 Using saved configuration from AI Config page")
+    else:
+        st.info("📁 Using default configuration - visit AI Config page to customize settings")
     
     try:
         from ai_optimizer.config import AIConfig
