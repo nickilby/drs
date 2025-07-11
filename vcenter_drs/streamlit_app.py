@@ -1484,7 +1484,7 @@ Number of Recommendations: {num_recommendations}
                             st.success(f"✅ AI predictions generated for {len(host_predictions)} hosts")
                             
                             # Sort by best ensemble prediction
-                            predictions_dict: Dict[str, float] = host_predictions[0]['predictions']
+                            predictions_dict = host_predictions[0]['predictions']
                             best_model = 'ensemble' if 'ensemble' in predictions_dict else list(predictions_dict.keys())[0]
                             host_predictions.sort(key=lambda x: x['predictions'].get(best_model, 0), reverse=True)
                             

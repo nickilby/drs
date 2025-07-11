@@ -597,8 +597,8 @@ class VMOptimizer:
         return {
             'cpu_utilization_change': new_cpu_utilization - host_metrics.cpu_usage,
             'memory_utilization_change': new_memory_utilization - host_metrics.memory_usage,
-            'estimated_cpu_ready_time': float(max(0.0, (new_cpu_utilization - 80) * 2)),  # ms
-            'estimated_memory_balloon': float(max(0.0, (new_memory_utilization - 85) * 100))  # MB
+            'estimated_cpu_ready_time': max(0.0, float((new_cpu_utilization - 80) * 2)),  # ms
+            'estimated_memory_balloon': max(0.0, float((new_memory_utilization - 85) * 100))  # MB
         }
     
     def get_optimization_summary(self) -> Dict[str, Any]:
