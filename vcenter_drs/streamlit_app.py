@@ -268,10 +268,24 @@ def run_collection_in_background():
 # Add sidebar navigation
 page = st.sidebar.radio("Navigation", ["Compliance Dashboard", "Exception Management", "Rule Management", "VM Rule Validator", "AI Config", "AI Optimizer"])
 
-# Add warning for data refresh
-st.warning("⚠️ Refreshing data from vCenter can take several minutes to finish. Please be patient after pressing the button.")
-
 if page == "Compliance Dashboard":
+    # Add warning for data refresh
+    st.warning("⚠️ Refreshing data from vCenter can take several minutes to finish. Please be patient after pressing the button.")
+    if st.button("Refresh Data from vCenter"):
+        last_duration = get_last_collection_time()  # Read from .txt
+        progress = st.progress(0)
+        # Start data collection in a background thread
+        thread = threading.Thread(target=run_collection_in_background)
+        thread.start()
+        start = time.time()
+        while thread.is_alive():
+            elapsed = time.time() - start
+            percent = min(1.0, elapsed / last_duration)
+            progress.progress(int(percent * 100))
+            time.sleep(0.1)
+        progress.progress(100)
+        st.success("Data refreshed from vCenter!")
+
     if 'violations' not in st.session_state:
         st.session_state['violations'] = None
 
