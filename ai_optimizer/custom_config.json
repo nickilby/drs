@@ -1,0 +1,30 @@
+{
+  "prometheus": {
+    "url": "http://prometheus.zengenti.com",
+    "port": 9090,
+    "timeout": 30,
+    "retry_attempts": 3
+  },
+  "analysis": {
+    "cpu_trend_hours": 24,
+    "storage_trend_days": 3,
+    "ram_trend_hours": 24,
+    "io_trend_days": 3,
+    "ready_time_window": 24
+  },
+  "optimization": {
+    "ideal_host_usage_min": 0.3,
+    "ideal_host_usage_max": 0.7,
+    "cpu_priority_weight": 1.3,
+    "ram_priority_weight": 0.9,
+    "ready_time_priority_weight": 1.5,
+    "io_priority_weight": 0.6,
+    "max_recommendations": 5
+  },
+  "ml": {
+    "training_episodes": 10000,
+    "learning_rate": 0.010999999999999998,
+    "batch_size": 128,
+    "exploration_rate": 0.16
+  }
+}

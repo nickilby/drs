@@ -2,7 +2,7 @@
 
 import os
 import json
-from db.metrics_db import MetricsDB
+from vcenter_drs.db.metrics_db import MetricsDB
 from collections import defaultdict
 import re
 
@@ -123,9 +123,13 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
         hosts = {hid: h for hid, h in hosts.items() if h['cluster_id'] in cluster_ids}
         vms = {vid: v for vid, v in vms.items() if v['host_id'] in hosts}
     
-    vm_name_to_id = {vm['name']: vm_id for vm_id, vm in vms.items()}
+    # Filter out powered-off VMs from violation detection
+    powered_on_vms = {vid: v for vid, v in vms.items() 
+                      if (v.get('power_status') or '').lower() == 'poweredon'}
+    
+    vm_name_to_id = {vm['name']: vm_id for vm_id, vm in powered_on_vms.items()}
     vm_alias_role = {}
-    for vm_id, vm in vms.items():
+    for vm_id, vm in powered_on_vms.items():
         alias, role = parse_alias_and_role(vm['name'])
         vm_alias_role[vm_id] = (alias, role)
     alias_to_vm_ids = defaultdict(list)
@@ -275,7 +279,7 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
             # Role-based
             if 'role' in rule:
                 role = rule['role'].upper() if isinstance(rule['role'], str) else [r.upper() for r in rule['role']]
-                for vm_id, vm in vms.items():
+                for vm_id, vm in powered_on_vms.items():
                     if vm_id in processed_vms:
                         continue
                     alias, vm_role = vm_alias_role[vm_id]
@@ -312,7 +316,7 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
             # Name-pattern-based
             if 'name_pattern' in rule:
                 name_pattern = rule['name_pattern']
-                for vm_id, vm in vms.items():
+                for vm_id, vm in powered_on_vms.items():
                     if vm_id in processed_vms:
                         continue
                     if name_pattern in vm['name']:
@@ -356,7 +360,7 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                 role = rule['role'].upper() if isinstance(rule['role'], str) else [r.upper() for r in rule['role']]
                 # Group VMs by pool, alias, and role combination (allow different roles on same pool)
                 pool_alias_role_groups = defaultdict(list)
-                for vm_id, vm in vms.items():
+                for vm_id, vm in powered_on_vms.items():
                     alias, vm_role = vm_alias_role[vm_id]
                     dataset_name = vm.get('dataset_name') or ''
                     # Extract pool name from dataset (assuming format like HQS5WEB1, HQS5DAT1 where HQS5 is the pool)
@@ -401,7 +405,7 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                 name_pattern = rule['name_pattern']
                 name_exclude_pattern = rule.get('name_exclude_pattern')
                 pool_alias_groups = defaultdict(list)
-                for vm_id, vm in vms.items():
+                for vm_id, vm in powered_on_vms.items():
                     # Check if VM name matches the pattern (support both simple and regex patterns)
                     name_matches = False
                     if '*' in name_pattern or '.*' in name_pattern:
@@ -461,7 +465,7 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
                 role = rule['role'].upper() if isinstance(rule['role'], str) else [r.upper() for r in rule['role']]
                 # Group VMs by dataset
                 dataset_groups = defaultdict(list)
-                for vm_id, vm in vms.items():
+                for vm_id, vm in powered_on_vms.items():
                     alias, vm_role = vm_alias_role[vm_id]
                     dataset_name = vm.get('dataset_name') or ''
                     if ((isinstance(role, str) and vm_role == role) or (isinstance(role, list) and vm_role in role)) and any(pat in dataset_name for pat in patterns):
@@ -500,7 +504,7 @@ def evaluate_rules(cluster_filter=None, return_structured=False):
             if 'name_pattern' in rule:
                 name_pattern = rule['name_pattern']
                 dataset_groups = defaultdict(list)
-                for vm_id, vm in vms.items():
+                for vm_id, vm in powered_on_vms.items():
                     if name_pattern in vm['name']:
                         alias, vm_role = vm_alias_role[vm_id]
                         dataset_name = vm.get('dataset_name') or ''
