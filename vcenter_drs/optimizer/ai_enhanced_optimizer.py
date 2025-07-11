@@ -240,9 +240,9 @@ class FederatedLearningCoordinator:
     """
     def __init__(self, num_clients: int):
         self.num_clients = num_clients
-        self.global_model = None
-        self.client_models = []
-        self.aggregation_weights = []
+        self.global_model: Optional[nn.Module] = None
+        self.client_models: List[nn.Module] = []
+        self.aggregation_weights: List[float] = []
     
     def aggregate_models(self, client_models: List[nn.Module], weights: List[float]):
         """Aggregate client models using FedAvg"""
@@ -302,7 +302,7 @@ class MultiAgentSystem:
     def reach_consensus(self, recommendations: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Reach consensus among agents"""
         # Weighted voting based on agent expertise
-        votes = {}
+        votes: Dict[int, float] = {}
         total_weight = 0
         
         for agent in self.agents:

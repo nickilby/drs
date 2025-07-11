@@ -342,7 +342,7 @@ class MLEngine:
                 
                 # Calculate placement score based on optimization criteria
                 placement_score = self._calculate_placement_score(
-                    vm_metrics={'cpu': cpu_usage, 'ram': ram_usage, 'ready_time': ready_time, 'io': io_usage},
+                    vm_metrics={'cpu': float(cpu_usage), 'ram': float(ram_usage), 'ready_time': float(ready_time), 'io': float(io_usage)},
                     host_metrics=host_metrics
                 )
                 
