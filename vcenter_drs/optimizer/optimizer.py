@@ -79,8 +79,8 @@ class VMPlacementRequest:
     required_storage: float  # GB
     network_requirements: float  # Mbps
     priority: str = "normal"  # low, normal, high, critical
-    preferred_hosts: List[str] = None
-    excluded_hosts: List[str] = None
+    preferred_hosts: Optional[List[str]] = None
+    excluded_hosts: Optional[List[str]] = None
 
 
 @dataclass
@@ -234,7 +234,7 @@ class VMOptimizer:
     def _get_average_metric(self, metrics: List[Dict], metric_name: str, default: float) -> float:
         """Get the average value for a specific metric over the last 24h"""
         values = [float(m['value']) for m in metrics if m['metric_name'] == metric_name]
-        return np.mean(values) if values else default
+        return float(np.mean(values)) if values else default
     
     def _calculate_interference_score(self, host_id: int, vm_count: int) -> float:
         """Calculate VM interference score based on density and performance variance"""
@@ -508,7 +508,7 @@ class VMOptimizer:
         variance = np.var(utilizations)
         
         # Score based on balance and overall utilization
-        balance_score = max(0, 1 - variance * 2)  # Lower variance = higher score
+        balance_score = max(0.0, 1.0 - variance * 2)  # Lower variance = higher score
         
         # Prefer moderate utilization (not too low, not too high)
         avg_utilization = np.mean(utilizations)
@@ -517,7 +517,7 @@ class VMOptimizer:
         elif avg_utilization < 0.3:
             utilization_score = avg_utilization / 0.3  # Underutilized
         else:
-            utilization_score = max(0, 1 - (avg_utilization - 0.7) / 0.3)  # Overutilized
+            utilization_score = max(0.0, 1.0 - (avg_utilization - 0.7) / 0.3)  # Overutilized
         
         return (balance_score * 0.6 + utilization_score * 0.4)
     

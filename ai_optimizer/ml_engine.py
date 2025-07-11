@@ -28,10 +28,10 @@ class MLModel:
     
     def __init__(self, config: AIConfig):
         self.config = config
-        self.logger = logging.getLogger(__name__)
-        self.model = None
+        self.model: Optional[RandomForestRegressor] = None
         self.scaler = StandardScaler()
         self.is_trained = False
+        self.logger = logging.getLogger(__name__)
     
     def preprocess_data(self, data: List[Dict[str, Any]]) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -77,13 +77,13 @@ class MLModel:
     
     def train(self, data: List[Dict[str, Any]]) -> bool:
         """
-        Train the model on provided data.
+        Train the model on the provided data.
         
         Args:
-            data: Training data
+            data: List of dictionaries containing features and targets
             
         Returns:
-            bool: True if training successful
+            True if training successful, False otherwise
         """
         try:
             features, targets = self.preprocess_data(data)
@@ -95,11 +95,15 @@ class MLModel:
                 random_state=42
             )
             
-            self.model.fit(features, targets)
-            self.is_trained = True
-            
-            self.logger.info(f"Model trained successfully on {len(data)} samples")
-            return True
+            if self.model is not None:
+                self.model.fit(features, targets)
+                self.is_trained = True
+                
+                self.logger.info(f"Model trained successfully on {len(data)} samples")
+                return True
+            else:
+                self.logger.error("Failed to initialize model")
+                return False
             
         except Exception as e:
             self.logger.error(f"Model training failed: {e}")
@@ -115,7 +119,7 @@ class MLModel:
         Returns:
             List of predicted scores
         """
-        if not self.is_trained:
+        if not self.is_trained or self.model is None:
             raise PredictionError("MLModel", "Model not trained")
         
         try:
@@ -140,7 +144,7 @@ class MLModel:
             features_scaled = self.scaler.transform(features_array)
             
             predictions = self.model.predict(features_scaled)
-            return predictions.tolist()
+            return [float(p) for p in predictions.tolist()]
             
         except Exception as e:
             self.logger.error(f"Prediction failed: {e}")
@@ -182,8 +186,8 @@ class NeuralNetworkModel(MLModel):
     def __init__(self, config: AIConfig):
         super().__init__(config)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.network = None
-        self.optimizer = None
+        self.network: Optional[nn.Module] = None
+        self.optimizer: Optional[torch.optim.Optimizer] = None
     
     def _build_network(self, input_size: int) -> nn.Module:
         """Build the neural network architecture."""
@@ -237,7 +241,7 @@ class NeuralNetworkModel(MLModel):
     
     def predict(self, features: List[Dict[str, Any]]) -> List[float]:
         """Make predictions using the neural network."""
-        if not self.is_trained:
+        if not self.is_trained or self.network is None:
             raise PredictionError("NeuralNetworkModel", "Model not trained")
         
         try:
@@ -269,7 +273,7 @@ class NeuralNetworkModel(MLModel):
             with torch.no_grad():
                 predictions = self.network(X).squeeze().cpu().numpy()
             
-            return predictions.tolist()
+            return [float(p) for p in predictions.tolist()]
             
         except Exception as e:
             self.logger.error(f"Neural network prediction failed: {e}")

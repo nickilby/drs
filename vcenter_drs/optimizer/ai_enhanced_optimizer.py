@@ -72,13 +72,11 @@ class AIVMRequest:
     required_memory: float
     required_storage: float
     network_requirements: float
-    priority: str = "normal"
-    
-    # AI-enhanced features
     workload_profile: str  # "web_server", "database", "compute_intensive"
     performance_requirements: Dict[str, float]  # Latency, throughput requirements
     placement_constraints: List[str]  # Business constraints
     predicted_workload: List[float]  # Predicted resource usage over time
+    priority: str = "normal"
 
 
 @dataclass
@@ -170,11 +168,11 @@ class ReinforcementLearningAgent:
     def get_action(self, state: np.ndarray) -> int:
         """Get action using epsilon-greedy policy"""
         if np.random.random() < self.epsilon:
-            return np.random.randint(self.action_size)
+            return int(np.random.randint(self.action_size))
         
         state_tensor = torch.FloatTensor(state).unsqueeze(0)
         q_values = self.q_network(state_tensor)
-        return torch.argmax(q_values).item()
+        return int(torch.argmax(q_values).item())
     
     def train(self, state: np.ndarray, action: int, reward: float, next_state: np.ndarray, done: bool):
         """Train the agent using experience replay"""
@@ -268,8 +266,8 @@ class FederatedLearningCoordinator:
         for name, param in self.global_model.named_parameters():
             param.data = global_state[name]
     
-    def distribute_model(self) -> nn.Module:
-        """Distribute global model to clients"""
+    def distribute_model(self) -> Optional[nn.Module]:
+        """Distribute the global model to clients"""
         return self.global_model
 
 

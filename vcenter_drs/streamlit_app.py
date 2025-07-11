@@ -693,7 +693,7 @@ if page == "Compliance Dashboard":
             for group_key, grouped_violations in alias_rule_grouped.items():
                 # Extract alias and rule_type from the group key
                 if len(group_key) == 3:  # dataset-affinity with unique key
-                    alias, rule_type, _ = group_key
+                    alias, rule_type, affected_vms = group_key
                 else:  # other rule types
                     alias, rule_type = group_key
                 if len(grouped_violations) == 1:

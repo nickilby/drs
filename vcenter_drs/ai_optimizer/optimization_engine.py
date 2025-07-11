@@ -113,7 +113,7 @@ class OptimizationEngine:
                 print("No available hosts found in the same cluster as the VM")
                 return []
             
-            recommendations = []
+            recommendations: List[Dict[str, Any]] = []
             print(f"Evaluating {len(filtered_hosts)} hosts for placement...")
             
             for i, host_name in enumerate(filtered_hosts):
@@ -153,7 +153,7 @@ class OptimizationEngine:
                 print(f"  Recommendation added for {host_name} with score {score:.3f}")
             
             # Sort by score (higher is better) and limit to requested number
-            recommendations.sort(key=lambda x: x['score'], reverse=True)
+            recommendations.sort(key=lambda x: float(x['score']), reverse=True)
             final_recommendations = recommendations[:num_recommendations]
             print(f"Generated {len(final_recommendations)} recommendations")
             
