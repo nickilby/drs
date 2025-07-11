@@ -1,7 +1,7 @@
 import streamlit as st
 import sys
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
 from vcenter_drs.api.collect_and_store_metrics import main as collect_and_store_metrics_main
 from vcenter_drs.rules.rules_engine import evaluate_rules, get_db_state, load_rules, parse_alias_and_role
 import time
@@ -678,12 +678,22 @@ if page == "Compliance Dashboard":
                 else:
                     alias = 'unknown'
                 
-                # Group by (alias, rule_type)
-                group_key = (alias, violation['type'])
+                # For dataset-affinity rules, don't group violations since each is for a specific VM
+                if violation['type'] == 'dataset-affinity':
+                    # Use a unique key for each violation to prevent grouping
+                    group_key = (alias, violation['type'], tuple(violation['affected_vms']))
+                else:
+                    # Group by (alias, rule_type) for other rule types
+                    group_key = (alias, violation['type'])
                 alias_rule_grouped[group_key].append(violation)
             
             # Display grouped violations
-            for (alias, rule_type), grouped_violations in alias_rule_grouped.items():
+            for group_key, grouped_violations in alias_rule_grouped.items():
+                # Extract alias and rule_type from the group key
+                if len(group_key) == 3:  # dataset-affinity with unique key
+                    alias, rule_type, _ = group_key
+                else:  # other rule types
+                    alias, rule_type = group_key
                 if len(grouped_violations) == 1:
                     # Single violation - display normally
                     violation = grouped_violations[0]
@@ -967,8 +977,90 @@ elif page == "AI Config":
         
         # Save configuration button
         if st.button("Save Configuration"):
-            # Update configuration (this would need to be implemented to persist changes)
-            st.success("Configuration saved! (Note: This is a placeholder - actual persistence not yet implemented)")
+            try:
+                # Create updated configuration
+                updated_config = {
+                    'prometheus': {
+                        'url': prometheus_url,
+                        'port': prometheus_port,
+                        'timeout': timeout,
+                        'retry_attempts': retry_attempts
+                    },
+                    'analysis': {
+                        'cpu_trend_hours': cpu_trend_hours,
+                        'storage_trend_days': storage_trend_days,
+                        'ram_trend_hours': ram_trend_hours,
+                        'io_trend_days': io_trend_days,
+                        'ready_time_window': ready_time_window
+                    },
+                    'optimization': {
+                        'ideal_host_usage_min': ideal_host_min / 100.0,
+                        'ideal_host_usage_max': ideal_host_max / 100.0,
+                        'cpu_priority_weight': cpu_weight,
+                        'ram_priority_weight': ram_weight,
+                        'ready_time_priority_weight': ready_time_weight,
+                        'io_priority_weight': io_weight,
+                        'max_recommendations': max_recommendations
+                    },
+                    'ml': {
+                        'training_episodes': training_episodes,
+                        'learning_rate': learning_rate,
+                        'batch_size': batch_size,
+                        'exploration_rate': exploration_rate
+                    }
+                }
+                
+                # Save to file
+                config_file = "ai_optimizer/custom_config.json"
+                os.makedirs(os.path.dirname(config_file), exist_ok=True)
+                with open(config_file, 'w') as f:
+                    json.dump(updated_config, f, indent=2)
+                
+                st.success("✅ Configuration saved successfully!")
+                st.info("Note: You'll need to retrain models for changes to take effect.")
+                
+            except Exception as e:
+                st.error(f"❌ Failed to save configuration: {e}")
+        
+        # Load saved configuration
+        config_file = "ai_optimizer/custom_config.json"
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, 'r') as f:
+                    saved_config = json.load(f)
+                st.info("📁 Loaded saved configuration")
+            except Exception as e:
+                st.warning(f"⚠️ Could not load saved configuration: {e}")
+        else:
+            st.info("📁 No saved configuration found - using defaults")
+        
+        # Train Models button (conveniently placed on config page)
+        st.header("Model Training")
+        st.write("After saving configuration changes, retrain the models to apply the new settings.")
+        
+        if st.button("🔄 Train Models with Current Configuration"):
+            with st.spinner("Training AI models with current configuration..."):
+                try:
+                    # Get current VMs and hosts for training
+                    clusters, hosts, vms = get_db_state()
+                    vm_list = list(vms.values())
+                    host_list = list(hosts.values())
+                    
+                    if len(vm_list) < 5 or len(host_list) < 2:
+                        st.warning("⚠️ Insufficient data for training. Need at least 5 VMs and 2 hosts.")
+                    else:
+                        # Train models
+                        success = optimization_engine.train_models(vm_list, host_list)
+                        
+                        if success:
+                            st.success("✅ Models trained successfully with current configuration!")
+                            st.info(f"Trained on {len(vm_list)} VMs and {len(host_list)} hosts")
+                        else:
+                            st.error("❌ Model training failed. Check Prometheus connection and data availability.")
+                            
+                except Exception as e:
+                    st.error(f"❌ Training failed: {e}")
+                    st.info("Make sure Prometheus is accessible and has sufficient historical data.")
         
         # System status
         st.header("System Status")

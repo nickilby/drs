@@ -74,42 +74,54 @@ class AIConfig:
     
     def _load_config(self) -> None:
         """Load configuration from environment variables and defaults."""
+        # Check for saved custom configuration first
+        custom_config_file = "ai_optimizer/custom_config.json"
+        custom_config = {}
+        
+        try:
+            if os.path.exists(custom_config_file):
+                import json
+                with open(custom_config_file, 'r') as f:
+                    custom_config = json.load(f)
+        except Exception as e:
+            print(f"Warning: Could not load custom config: {e}")
+        
         # Prometheus configuration
         self.prometheus = PrometheusConfig(
-            url=os.getenv('PROMETHEUS_URL', 'http://prometheus.zengenti.com'),
-            port=int(os.getenv('PROMETHEUS_PORT', '9090')),
-            timeout=int(os.getenv('PROMETHEUS_TIMEOUT', '30')),
-            retry_attempts=int(os.getenv('PROMETHEUS_RETRY_ATTEMPTS', '3'))
+            url=custom_config.get('prometheus', {}).get('url', os.getenv('PROMETHEUS_URL', 'http://prometheus.zengenti.com')),
+            port=custom_config.get('prometheus', {}).get('port', int(os.getenv('PROMETHEUS_PORT', '9090'))),
+            timeout=custom_config.get('prometheus', {}).get('timeout', int(os.getenv('PROMETHEUS_TIMEOUT', '30'))),
+            retry_attempts=custom_config.get('prometheus', {}).get('retry_attempts', int(os.getenv('PROMETHEUS_RETRY_ATTEMPTS', '3')))
         )
         
         # Analysis configuration
         self.analysis = AnalysisConfig(
-            cpu_trend_hours=int(os.getenv('CPU_TREND_HOURS', '1')),
-            storage_trend_days=int(os.getenv('STORAGE_TREND_DAYS', '3')),
-            ram_trend_hours=int(os.getenv('RAM_TREND_HOURS', '6')),
-            io_trend_days=int(os.getenv('IO_TREND_DAYS', '2')),
-            ready_time_window=int(os.getenv('READY_TIME_WINDOW', '1'))
+            cpu_trend_hours=custom_config.get('analysis', {}).get('cpu_trend_hours', int(os.getenv('CPU_TREND_HOURS', '1'))),
+            storage_trend_days=custom_config.get('analysis', {}).get('storage_trend_days', int(os.getenv('STORAGE_TREND_DAYS', '3'))),
+            ram_trend_hours=custom_config.get('analysis', {}).get('ram_trend_hours', int(os.getenv('RAM_TREND_HOURS', '6'))),
+            io_trend_days=custom_config.get('analysis', {}).get('io_trend_days', int(os.getenv('IO_TREND_DAYS', '2'))),
+            ready_time_window=custom_config.get('analysis', {}).get('ready_time_window', int(os.getenv('READY_TIME_WINDOW', '1')))
         )
         
         # ML configuration
         self.ml = MLConfig(
             model_save_path=os.getenv('MODEL_SAVE_PATH', 'ai_optimizer/models'),
-            training_episodes=int(os.getenv('TRAINING_EPISODES', '1000')),
-            learning_rate=float(os.getenv('LEARNING_RATE', '0.001')),
+            training_episodes=custom_config.get('ml', {}).get('training_episodes', int(os.getenv('TRAINING_EPISODES', '1000'))),
+            learning_rate=custom_config.get('ml', {}).get('learning_rate', float(os.getenv('LEARNING_RATE', '0.001'))),
             discount_factor=float(os.getenv('DISCOUNT_FACTOR', '0.95')),
-            exploration_rate=float(os.getenv('EXPLORATION_RATE', '0.1')),
-            batch_size=int(os.getenv('BATCH_SIZE', '32'))
+            exploration_rate=custom_config.get('ml', {}).get('exploration_rate', float(os.getenv('EXPLORATION_RATE', '0.1'))),
+            batch_size=custom_config.get('ml', {}).get('batch_size', int(os.getenv('BATCH_SIZE', '32')))
         )
         
         # Optimization configuration
         self.optimization = OptimizationConfig(
-            ideal_host_usage_min=float(os.getenv('IDEAL_HOST_USAGE_MIN', '0.30')),
-            ideal_host_usage_max=float(os.getenv('IDEAL_HOST_USAGE_MAX', '0.70')),
-            ram_priority_weight=float(os.getenv('RAM_PRIORITY_WEIGHT', '1.0')),
-            ready_time_priority_weight=float(os.getenv('READY_TIME_PRIORITY_WEIGHT', '0.8')),
-            cpu_priority_weight=float(os.getenv('CPU_PRIORITY_WEIGHT', '0.6')),
-            io_priority_weight=float(os.getenv('IO_PRIORITY_WEIGHT', '0.4')),
-            max_recommendations=int(os.getenv('MAX_RECOMMENDATIONS', '10'))
+            ideal_host_usage_min=custom_config.get('optimization', {}).get('ideal_host_usage_min', float(os.getenv('IDEAL_HOST_USAGE_MIN', '0.30'))),
+            ideal_host_usage_max=custom_config.get('optimization', {}).get('ideal_host_usage_max', float(os.getenv('IDEAL_HOST_USAGE_MAX', '0.70'))),
+            ram_priority_weight=custom_config.get('optimization', {}).get('ram_priority_weight', float(os.getenv('RAM_PRIORITY_WEIGHT', '1.0'))),
+            ready_time_priority_weight=custom_config.get('optimization', {}).get('ready_time_priority_weight', float(os.getenv('READY_TIME_PRIORITY_WEIGHT', '0.8'))),
+            cpu_priority_weight=custom_config.get('optimization', {}).get('cpu_priority_weight', float(os.getenv('CPU_PRIORITY_WEIGHT', '0.6'))),
+            io_priority_weight=custom_config.get('optimization', {}).get('io_priority_weight', float(os.getenv('IO_PRIORITY_WEIGHT', '0.4'))),
+            max_recommendations=custom_config.get('optimization', {}).get('max_recommendations', int(os.getenv('MAX_RECOMMENDATIONS', '10')))
         )
     
     def validate(self) -> bool:
