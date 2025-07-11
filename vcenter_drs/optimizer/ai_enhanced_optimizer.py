@@ -531,12 +531,8 @@ class AIEnhancedVMOptimizer:
     
     def _calculate_compliance_score_ai(self, host_metrics: AIHostMetrics, request: AIVMRequest) -> float:
         """AI-enhanced compliance scoring"""
-        # Use base class method if available, otherwise calculate manually
-        try:
-            base_score = super()._calculate_compliance_score(host_metrics, request)
-        except AttributeError:
-            # Fallback calculation
-            base_score = 0.8  # Default compliance score
+        # Calculate base compliance score manually since parent class doesn't have this method
+        base_score = 0.8  # Default compliance score
         
         # AI enhancements
         # Consider historical compliance patterns
@@ -552,16 +548,12 @@ class AIEnhancedVMOptimizer:
     
     def _calculate_performance_score_ai(self, host_metrics: AIHostMetrics, request: AIVMRequest) -> float:
         """AI-enhanced performance scoring"""
-        # Use base class method if available, otherwise calculate manually
-        try:
-            base_score = super()._calculate_performance_score(host_metrics, request)
-        except AttributeError:
-            # Fallback calculation
-            base_score = 0.7  # Default performance score
+        # Calculate base performance score manually since parent class doesn't have this method
+        base_score = 0.7  # Default performance score
         
         # AI enhancements
         # Consider performance trends
-        trend_impact = np.mean(host_metrics.performance_trend[-6:]) / 100
+        trend_impact = float(np.mean(host_metrics.performance_trend[-6:])) / 100
         
         # Consider workload pattern compatibility
         pattern_compatibility = self._assess_pattern_compatibility(host_metrics, request)

@@ -683,7 +683,8 @@ if page == "Compliance Dashboard":
                 # For dataset-affinity rules, don't group violations since each is for a specific VM
                 if violation['type'] == 'dataset-affinity':
                     # Use a unique key for each violation to prevent grouping
-                    group_key = (alias, violation['type'], tuple(violation['affected_vms']))
+                    affected_vms_list = list(violation['affected_vms']) if isinstance(violation['affected_vms'], (list, tuple)) else [violation['affected_vms']]
+                    group_key = (alias, violation['type'], tuple(affected_vms_list))
                 else:
                     # Group by (alias, rule_type) for other rule types
                     group_key = (alias, violation['type'])
@@ -1486,6 +1487,7 @@ Number of Recommendations: {num_recommendations}
                             
                             # Sort by best ensemble prediction
                             predictions_dict = host_predictions[0]['predictions']
+                            assert isinstance(predictions_dict, dict), "predictions_dict should be a dict"
                             best_model = 'ensemble' if 'ensemble' in predictions_dict else list(predictions_dict.keys())[0]
                             host_predictions.sort(key=lambda x: x['predictions'].get(best_model, 0), reverse=True)
                             
