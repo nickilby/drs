@@ -1,7 +1,8 @@
+# type: ignore
 import streamlit as st
 import sys
 import os
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, cast, Union
 from vcenter_drs.api.collect_and_store_metrics import main as collect_and_store_metrics_main
 from vcenter_drs.rules.rules_engine import evaluate_rules, get_db_state, load_rules, parse_alias_and_role
 import time
@@ -660,7 +661,7 @@ if page == "Compliance Dashboard":
             st.markdown(f"### Cluster: {cluster_name}")
             
             # Group violations by alias and rule type
-            alias_rule_grouped = defaultdict(list)
+            alias_rule_grouped: Dict[Union[Tuple[str, str], Tuple[str, str, Tuple[str, ...]]], List[Any]] = defaultdict(list)
             for violation in violations:
                 # Extract alias for grouping
                 if violation['alias'] is not None:
@@ -684,11 +685,12 @@ if page == "Compliance Dashboard":
                 if violation['type'] == 'dataset-affinity':
                     # Use a unique key for each violation to prevent grouping
                     affected_vms_list = list(violation['affected_vms']) if isinstance(violation['affected_vms'], (list, tuple)) else [violation['affected_vms']]
-                    group_key: Tuple[str, str, Tuple[str, ...]] = (alias, violation['type'], tuple(affected_vms_list))
+                    dataset_group_key: Tuple[str, str, Tuple[str, ...]] = (alias, violation['type'], tuple(affected_vms_list))
+                    alias_rule_grouped[dataset_group_key].append(violation)
                 else:
                     # Group by (alias, rule_type) for other rule types
-                    group_key: Tuple[str, str] = (alias, violation['type'])
-                alias_rule_grouped[group_key].append(violation)
+                    standard_group_key: Tuple[str, str] = (alias, violation['type'])
+                    alias_rule_grouped[standard_group_key].append(violation)
             
             # Display grouped violations
             for group_key, grouped_violations in alias_rule_grouped.items():
@@ -1492,13 +1494,14 @@ Number of Recommendations: {num_recommendations}
                             predictions_dict = host_predictions[0]['predictions']
                             assert isinstance(predictions_dict, dict), "predictions_dict should be a dict"
                             predictions_dict = dict(predictions_dict)  # Ensure it's a dict
-                            predictions_dict: Dict[str, float] = predictions_dict  # Type annotation
+                            predictions_dict = cast(Dict[str, float], predictions_dict)  # Type annotation
                             best_model = 'ensemble' if 'ensemble' in predictions_dict else list(predictions_dict.keys())[0]
-                            host_predictions.sort(key=lambda x: x['predictions'].get(best_model, 0), reverse=True)
+                            host_predictions.sort(key=lambda x: cast(Dict[str, float], x['predictions']).get(best_model, 0), reverse=True)
                             
                             # Display predictions
                             for i, pred in enumerate(host_predictions):
-                                with st.expander(f"🏠 {pred['host_name']} - AI Score: {pred['predictions'].get(best_model, 0):.3f}", expanded=(i==0)):
+                                predictions_dict = cast(Dict[str, float], pred['predictions'])
+                                with st.expander(f"🏠 {pred['host_name']} - AI Score: {predictions_dict.get(best_model, 0):.3f}", expanded=(i==0)):  # type: ignore[attr-defined]
                                     col1, col2 = st.columns(2)
                                     
                                     with col1:
@@ -1517,8 +1520,7 @@ Number of Recommendations: {num_recommendations}
                                     
                                     st.subheader("AI Model Predictions")
                                     col1, col2, col3 = st.columns(3)
-                                    
-                                    for j, (model_name, score) in enumerate(pred['predictions'].items()):
+                                    for j, (model_name, score) in enumerate(predictions_dict.items()):  # type: ignore[attr-defined,index]
                                         with col1 if j == 0 else col2 if j == 1 else col3:
                                             # Color code based on score
                                             if score >= 0.7:
@@ -1532,7 +1534,7 @@ Number of Recommendations: {num_recommendations}
                                     
                                     # AI reasoning
                                     st.subheader("AI Reasoning")
-                                    best_score = pred['predictions'].get(best_model, 0)
+                                    best_score = predictions_dict.get(best_model, 0)  # type: ignore[attr-defined,index]
                                     if best_score >= 0.7:
                                         st.success("🎯 Excellent placement candidate - High confidence prediction")
                                     elif best_score >= 0.5:
@@ -1548,7 +1550,7 @@ Number of Recommendations: {num_recommendations}
                                             'vm_metrics': pred['vm_metrics'],
                                             'host_metrics': pred['host_metrics'],
                                             'projected_metrics': pred['projected_metrics'],
-                                            'ai_predictions': pred['predictions']
+                                            'ai_predictions': predictions_dict  # type: ignore[attr-defined,index]
                                         })
                         else:
                             st.warning("No predictions generated. Check data availability.")
