@@ -315,7 +315,7 @@ class MultiAgentSystem:
             votes[best_recommendation['host_id']] = votes.get(best_recommendation['host_id'], 0) + weight
         
         # Return recommendation with highest votes
-        best_host_id = max(votes, key=votes.get)
+        best_host_id = max(votes.keys(), key=lambda k: votes[k])
         return next(r for r in recommendations if r['host_id'] == best_host_id)
 
 
@@ -458,11 +458,11 @@ class AIEnhancedVMOptimizer:
                 return None
             
             # AI-enhanced features
-            performance_trend = self._calculate_performance_trend(host_id)
+            performance_trend = self._calculate_performance_trend(basic_metrics)
             workload_pattern = self._classify_workload_pattern(basic_metrics)
-            interference_signature = self._calculate_interference_signature(host_id)
+            interference_signature = self._calculate_interference_signature(basic_metrics)
             anomaly_score = self._calculate_anomaly_score(basic_metrics)
-            capacity_prediction = self._predict_capacity(host_id)
+            capacity_prediction = self._predict_capacity(basic_metrics)
             
             return AIHostMetrics(
                 host_id=host_id,
@@ -685,6 +685,157 @@ class AIEnhancedVMOptimizer:
         })
         
         return scenarios
+
+    def _can_accommodate_vm(self, host_metrics: AIHostMetrics, request: AIVMRequest) -> bool:
+        """Check if host has sufficient resources to accommodate the VM"""
+        # Check CPU capacity
+        available_cpu = host_metrics.cpu_usage < 0.8  # 80% threshold
+        if not available_cpu:
+            return False
+        
+        # Check memory capacity
+        available_memory = host_metrics.memory_usage < 0.85  # 85% threshold
+        if not available_memory:
+            return False
+        
+        return True
+    
+    def _get_agent_recommendations(self, host_metrics: AIHostMetrics, request: AIVMRequest) -> List[Dict[str, Any]]:
+        """Get recommendations from individual agents"""
+        recommendations = []
+        
+        # Performance agent recommendation
+        performance_score = self._calculate_performance_score_ai(host_metrics, request)
+        recommendations.append({
+            'host_id': host_metrics.host_id,
+            'score': performance_score,
+            'agent_type': 'performance'
+        })
+        
+        # Compliance agent recommendation
+        compliance_score = self._calculate_compliance_score_ai(host_metrics, request)
+        recommendations.append({
+            'host_id': host_metrics.host_id,
+            'score': compliance_score,
+            'agent_type': 'compliance'
+        })
+        
+        # Efficiency agent recommendation
+        efficiency_score = 1.0 - (host_metrics.cpu_usage + host_metrics.memory_usage) / 2.0
+        recommendations.append({
+            'host_id': host_metrics.host_id,
+            'score': efficiency_score,
+            'agent_type': 'efficiency'
+        })
+        
+        return recommendations
+
+    def _get_basic_host_metrics(self, host_id: int) -> Optional[Dict[str, Any]]:
+        """Get basic host metrics from database"""
+        try:
+            cursor = self.db.conn.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT h.*, c.name as cluster_name
+                FROM hosts h
+                JOIN clusters c ON h.cluster_id = c.id
+                WHERE h.id = %s
+            """, (host_id,))
+            host_info = cursor.fetchone()
+            cursor.close()
+            
+            if not host_info:
+                return None
+            
+            return {
+                'host_id': host_info['id'],
+                'host_name': host_info['name'],
+                'cluster_id': host_info['cluster_id'],
+                'cluster_name': host_info['cluster_name'],
+                'cpu_usage': 0.5,  # Mock values
+                'memory_usage': 0.6,
+                'network_usage': 0.3,
+                'storage_io': 0.4
+            }
+        except Exception as e:
+            print(f"Error getting basic host metrics: {e}")
+            return None
+    
+    def _calculate_performance_trend(self, host_metrics: AIHostMetrics) -> List[float]:
+        """Calculate performance trend over time"""
+        # Mock implementation - would use historical data
+        return [0.5, 0.6, 0.7, 0.65, 0.55]
+    
+    def _classify_workload_pattern(self, host_metrics: AIHostMetrics) -> str:
+        """Classify workload pattern based on metrics"""
+        if host_metrics.cpu_usage > 0.7:
+            return "cpu_intensive"
+        elif host_metrics.memory_usage > 0.7:
+            return "memory_intensive"
+        else:
+            return "balanced"
+    
+    def _calculate_interference_signature(self, host_metrics: AIHostMetrics) -> List[float]:
+        """Calculate VM interference signature"""
+        # Mock implementation
+        return [0.1, 0.2, 0.15, 0.25, 0.2]
+    
+    def _calculate_anomaly_score(self, host_metrics: AIHostMetrics) -> float:
+        """Calculate anomaly detection score"""
+        # Mock implementation
+        return 0.1
+    
+    def _predict_capacity(self, host_metrics: AIHostMetrics) -> Dict[str, float]:
+        """Predict capacity over time"""
+        return {
+            '1h': 0.6,
+            '6h': 0.7,
+            '24h': 0.8
+        }
+    
+    def _calculate_efficiency_score_ai(self, host_metrics: AIHostMetrics, request: AIVMRequest) -> float:
+        """Calculate efficiency score using AI"""
+        # Mock implementation
+        return 0.75
+    
+    def _calculate_confidence(self, host_metrics: AIHostMetrics, request: AIVMRequest) -> float:
+        """Calculate AI model confidence"""
+        # Mock implementation
+        return 0.85
+    
+    def _get_historical_compliance(self, host_metrics: AIHostMetrics) -> float:
+        """Get historical compliance score"""
+        # Mock implementation
+        return 0.9
+    
+    def _assess_workload_compatibility(self, host_metrics: AIHostMetrics, request: AIVMRequest) -> float:
+        """Assess workload compatibility"""
+        # Mock implementation
+        return 0.8
+    
+    def _assess_risk_pattern(self, host_metrics: AIHostMetrics, request: AIVMRequest) -> float:
+        """Assess risk pattern"""
+        # Mock implementation
+        return 0.2
+    
+    def _assess_pattern_compatibility(self, host_metrics: AIHostMetrics, request: AIVMRequest) -> float:
+        """Assess pattern compatibility"""
+        # Mock implementation
+        return 0.85
+    
+    def _assess_capacity_impact(self, host_metrics: AIHostMetrics, request: AIVMRequest) -> float:
+        """Assess capacity impact"""
+        # Mock implementation
+        return 0.7
+    
+    def _prepare_transformer_input(self, host_metrics: AIHostMetrics, request: AIVMRequest) -> torch.Tensor:
+        """Prepare input for transformer model"""
+        # Mock implementation
+        return torch.randn(1, 20)
+    
+    def _assess_compliance_risk(self, host_metrics: AIHostMetrics, request: AIVMRequest) -> float:
+        """Assess compliance risk"""
+        # Mock implementation
+        return 0.15
 
 
 # Example usage
