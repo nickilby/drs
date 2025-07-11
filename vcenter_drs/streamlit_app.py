@@ -693,7 +693,8 @@ if page == "Compliance Dashboard":
             for group_key, grouped_violations in alias_rule_grouped.items():
                 # Extract alias and rule_type from the group key
                 if len(group_key) == 3:  # dataset-affinity with unique key
-                    alias, rule_type, affected_vms = group_key
+                    alias, rule_type, affected_vms_tuple = group_key
+                    affected_vms = list(affected_vms_tuple) if isinstance(affected_vms_tuple, tuple) else [affected_vms_tuple]
                 else:  # other rule types
                     alias, rule_type = group_key
                 if len(grouped_violations) == 1:
@@ -1484,7 +1485,7 @@ Number of Recommendations: {num_recommendations}
                             st.success(f"✅ AI predictions generated for {len(host_predictions)} hosts")
                             
                             # Sort by best ensemble prediction
-                            predictions_dict: Dict[str, float] = host_predictions[0]['predictions']
+                            predictions_dict = host_predictions[0]['predictions']
                             best_model = 'ensemble' if 'ensemble' in predictions_dict else list(predictions_dict.keys())[0]
                             host_predictions.sort(key=lambda x: x['predictions'].get(best_model, 0), reverse=True)
                             

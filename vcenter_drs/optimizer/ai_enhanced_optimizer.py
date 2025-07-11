@@ -615,14 +615,14 @@ class AIEnhancedVMOptimizer:
         risks['anomaly_risk'] = host_metrics.anomaly_score
         
         # Capacity risk
-        capacity_risk = 0
+        capacity_risk = 0.0
         for time_horizon, prediction in host_metrics.capacity_prediction.items():
             if prediction > 0.9:  # 90% utilization
                 capacity_risk = max(capacity_risk, 1.0 - prediction)
         risks['capacity_risk'] = capacity_risk
         
         # Interference risk
-        risks['interference_risk'] = np.mean(host_metrics.interference_signature)
+        risks['interference_risk'] = float(np.mean(host_metrics.interference_signature))
         
         # Compliance risk
         risks['compliance_risk'] = self._assess_compliance_risk(host_metrics, request)
