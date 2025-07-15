@@ -122,7 +122,12 @@ def trigger_remediation_alias_api(alias, token, playbook_name="e-vmotion-server"
         print(f"DEBUG: Exception occurred: {e}")
         return False, f"API call error: {e}"
 
-st.set_page_config(page_title="vCenter DRS Compliance Dashboard", layout="wide")
+st.set_page_config(
+    page_title="vCenter DRS Compliance Dashboard", 
+    layout="wide",
+    # Add auto-refresh every 60 seconds to update timestamps
+    initial_sidebar_state="expanded"
+)
 
 # Prometheus Metrics Setup
 # Start metrics server in background thread
@@ -366,6 +371,19 @@ def run_collection_in_background():
 page = st.sidebar.radio("Navigation", ["Compliance Dashboard", "Exception Management", "Rule Management", "VM Rule Validator", "AI Config", "AI Optimizer"])
 
 if page == "Compliance Dashboard":
+    # Add auto-refresh for timestamp updates
+    import time
+    
+    # Check if we should auto-refresh the page to show updated timestamps
+    if 'last_page_refresh' not in st.session_state:
+        st.session_state['last_page_refresh'] = time.time()
+    
+    # Auto-refresh page every 60 seconds to show updated timestamps
+    current_time = time.time()
+    if current_time - st.session_state['last_page_refresh'] > 60:
+        st.session_state['last_page_refresh'] = current_time
+        st.rerun()
+    
     # Show last data refresh timestamp
     last_refresh_time = get_last_data_refresh_time()
     if last_refresh_time:
