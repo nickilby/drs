@@ -2,6 +2,7 @@
 import streamlit as st
 import sys
 import os
+import time
 from typing import Dict, Any, List, Tuple, cast, Union
 from vcenter_drs.api.collect_and_store_metrics import main as collect_and_store_metrics_main
 from vcenter_drs.rules.rules_engine import evaluate_rules, get_db_state, load_rules, parse_alias_and_role
@@ -308,6 +309,34 @@ def get_last_collection_time():
     except Exception:
         return 10  # Default to 10 seconds if not available
 
+def get_last_data_refresh_time():
+    """Get the timestamp of when vCenter data was last refreshed"""
+    try:
+        # Check if the file exists and get its modification time
+        if os.path.exists("last_collection_time.txt"):
+            return os.path.getmtime("last_collection_time.txt")
+        else:
+            return None
+    except Exception:
+        return None
+
+def format_timestamp(timestamp):
+    """Format timestamp for display"""
+    if timestamp is None:
+        return "Unknown"
+    from datetime import datetime
+    return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+
+def should_auto_refresh_compliance():
+    """Check if we should auto-refresh compliance based on data freshness"""
+    last_refresh = get_last_data_refresh_time()
+    if last_refresh is None:
+        return False
+    
+    # Auto-refresh if data is less than 10 minutes old
+    import time
+    return (time.time() - last_refresh) < 600  # 10 minutes
+
 def timed_data_collection():
     import time
     start = time.time()
@@ -337,6 +366,13 @@ def run_collection_in_background():
 page = st.sidebar.radio("Navigation", ["Compliance Dashboard", "Exception Management", "Rule Management", "VM Rule Validator", "AI Config", "AI Optimizer"])
 
 if page == "Compliance Dashboard":
+    # Show last data refresh timestamp
+    last_refresh_time = get_last_data_refresh_time()
+    if last_refresh_time:
+        st.info(f"📊 **Last vCenter Data Refresh:** {format_timestamp(last_refresh_time)}")
+    else:
+        st.warning("⚠️ **No vCenter data refresh history found.** Data may be stale.")
+    
     # Add warning for data refresh
     st.warning("⚠️ Refreshing data from vCenter can take several minutes to finish. Please be patient after pressing the button.")
     if st.button("Refresh Data from vCenter"):
@@ -353,6 +389,8 @@ if page == "Compliance Dashboard":
             time.sleep(0.1)
         progress.progress(100)
         st.success("Data refreshed from vCenter!")
+        # Force a page refresh to show updated timestamp
+        st.rerun()
 
     if 'violations' not in st.session_state:
         st.session_state['violations'] = None
@@ -360,17 +398,37 @@ if page == "Compliance Dashboard":
     # Add UI filter for powered-on VMs
     show_only_powered_on = st.checkbox("Show only powered-on VMs (hide violations for powered-off VMs)", value=True)
 
-    if st.button("Run Compliance Check"):
-        # Use the new structured output
+    # Auto-refresh compliance if data is fresh
+    auto_refresh = should_auto_refresh_compliance()
+    if auto_refresh and st.session_state.get('violations') is None:
+        st.info("🔄 Auto-refreshing compliance check with fresh data...")
         structured_violations = evaluate_rules(selected_cluster if selected_cluster != "All Clusters" else None, return_structured=True)
         st.session_state['violations'] = structured_violations
-        
-        # Update Prometheus metrics with the new violations
         update_violation_metrics(structured_violations)
-        
         if not structured_violations:
             st.success("✅ All VMs in this cluster are compliant! No violations found.")
             st.balloons()
+
+    # Manual compliance check button
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        if st.button("Run Compliance Check"):
+            # Use the new structured output
+            structured_violations = evaluate_rules(selected_cluster if selected_cluster != "All Clusters" else None, return_structured=True)
+            st.session_state['violations'] = structured_violations
+            
+            # Update Prometheus metrics with the new violations
+            update_violation_metrics(structured_violations)
+            
+            if not structured_violations:
+                st.success("✅ All VMs in this cluster are compliant! No violations found.")
+                st.balloons()
+    
+    with col2:
+        if auto_refresh and st.session_state.get('violations') is not None:
+            st.success("✅ Compliance data is fresh (auto-refreshed)")
+        elif last_refresh_time and (time.time() - last_refresh_time) > 600:
+            st.warning("⚠️ Data is older than 10 minutes. Consider refreshing vCenter data.")
 
     def display_single_violation(violation, cluster_name, idx, show_only_powered_on):
         """Display a single violation"""
