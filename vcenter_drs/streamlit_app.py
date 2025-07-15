@@ -479,7 +479,7 @@ if page == "Compliance Dashboard":
                     alias_display = first_vm
             else:
                 alias_display = 'unknown'
-            if st.button(f"Remediate/Fix for alias {alias_display}", key=f"remediate_fix_{unique_key_hash}"):
+            if st.button(f"Remediate Affected Hosts Only", key=f"remediate_fix_{unique_key_hash}"):
                 token = st.session_state.get('remediation_token')
                 if not token:
                     st.error("You must authenticate first. Please log in via the sidebar to obtain a valid token before attempting remediation.")
@@ -514,7 +514,7 @@ if page == "Compliance Dashboard":
                         st.error(msg)
             
             # Third button: Remediate Alias (runs against entire alias inventory)
-            if st.button(f"Remediate Alias {alias_display}", key=f"remediate_alias_{unique_key_hash}"):
+            if st.button(f"Remediate All Alias Hosts", key=f"remediate_alias_{unique_key_hash}"):
                 token = st.session_state.get('remediation_token')
                 if not token:
                     st.error("You must authenticate first. Please log in via the sidebar to obtain a valid token before attempting remediation.")
@@ -712,7 +712,7 @@ if page == "Compliance Dashboard":
                 except Exception as e:
                     st.error(f"[ERROR] Failed to add exception: {e}")
             
-            if st.button(f"Remediate/Fix for alias {display_alias} (Grouped)", key=f"remediate_fix_grouped_{unique_key_hash}"):
+            if st.button(f"Remediate Affected Hosts Only (Grouped)", key=f"remediate_fix_grouped_{unique_key_hash}"):
                 token = st.session_state.get('remediation_token')
                 if not token:
                     st.error("You must authenticate first. Please log in via the sidebar to obtain a valid token before attempting remediation.")
@@ -748,7 +748,7 @@ if page == "Compliance Dashboard":
                         st.error(msg)
             
             # Third button: Remediate Alias (runs against entire alias inventory)
-            if st.button(f"Remediate Alias {display_alias} (Grouped)", key=f"remediate_alias_grouped_{unique_key_hash}"):
+            if st.button(f"Remediate All Alias Hosts (Grouped)", key=f"remediate_alias_grouped_{unique_key_hash}"):
                 token = st.session_state.get('remediation_token')
                 if not token:
                     st.error("You must authenticate first. Please log in via the sidebar to obtain a valid token before attempting remediation.")
