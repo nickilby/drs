@@ -23,6 +23,14 @@ def bold_unicode(text):
     return ''.join([str(bold_map.get(ch, ch)) for ch in text])
 
 def trigger_remediation_api(alias, affected_vms, token, playbook_name="e-vmotion-server", priority="normal"):
+    # Validate inputs
+    if not alias or not isinstance(alias, str):
+        return False, "Invalid alias parameter"
+    if not affected_vms or not isinstance(affected_vms, (list, tuple)):
+        return False, "Invalid affected_vms parameter - must be a list"
+    if not token or not isinstance(token, str):
+        return False, "Invalid token parameter"
+    
     endpoint = API_BASE_URL.rstrip('/') + '/execute_playbook/'
     payload = {
         "alias": alias,
@@ -36,8 +44,17 @@ def trigger_remediation_api(alias, affected_vms, token, playbook_name="e-vmotion
         "Content-Type": "application/json",
         "X-Security-Token": token
     }
+    
+    # Debug logging
+    print(f"DEBUG: Sending API request to {endpoint}")
+    print(f"DEBUG: Payload: {payload}")
+    print(f"DEBUG: Headers: {headers}")
+    
     try:
         response = requests.post(endpoint, json=payload, headers=headers, timeout=10)
+        print(f"DEBUG: Response status: {response.status_code}")
+        print(f"DEBUG: Response text: {response.text[:500]}...")  # First 500 chars
+        
         if response.status_code == 200:
             resp_json = response.json()
             if resp_json.get('success'):
@@ -52,6 +69,56 @@ def trigger_remediation_api(alias, affected_vms, token, playbook_name="e-vmotion
         else:
             return False, f"API call failed: {response.status_code} {response.text}"
     except Exception as e:
+        print(f"DEBUG: Exception occurred: {e}")
+        return False, f"API call error: {e}"
+
+def trigger_remediation_alias_api(alias, token, playbook_name="e-vmotion-server", priority="normal"):
+    """Trigger remediation for entire alias inventory (not limited to specific VMs)"""
+    # Validate inputs
+    if not alias or not isinstance(alias, str):
+        return False, "Invalid alias parameter"
+    if not token or not isinstance(token, str):
+        return False, "Invalid token parameter"
+    
+    endpoint = API_BASE_URL.rstrip('/') + '/execute_playbook/'
+    payload = {
+        "alias": alias,
+        "playbook_name": playbook_name,
+        "priority": priority,
+        "options": {
+            "limit": []  # Empty array means run against entire alias inventory
+        }
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "X-Security-Token": token
+    }
+    
+    # Debug logging
+    print(f"DEBUG: Sending alias API request to {endpoint}")
+    print(f"DEBUG: Payload: {payload}")
+    print(f"DEBUG: Headers: {headers}")
+    
+    try:
+        response = requests.post(endpoint, json=payload, headers=headers, timeout=10)
+        print(f"DEBUG: Response status: {response.status_code}")
+        print(f"DEBUG: Response text: {response.text[:500]}...")  # First 500 chars
+        
+        if response.status_code == 200:
+            resp_json = response.json()
+            if resp_json.get('success'):
+                task_id = resp_json.get('new_task_id')
+                url = f"https://dashboard.zengenti.com/env/{alias}/history/{task_id}" if task_id else None
+                msg = f"Alias remediation triggered! Task ID: {task_id} (deduplicated: {resp_json.get('deduplicated')})"
+                if url:
+                    msg += f"\n[View Task History]({url})"
+                return True, msg
+            else:
+                return False, f"Alias remediation API error: {resp_json}"
+        else:
+            return False, f"API call failed: {response.status_code} {response.text}"
+    except Exception as e:
+        print(f"DEBUG: Exception occurred: {e}")
         return False, f"API call error: {e}"
 
 st.set_page_config(page_title="vCenter DRS Compliance Dashboard", layout="wide")
@@ -445,6 +512,41 @@ if page == "Compliance Dashboard":
                         st.success(msg)
                     else:
                         st.error(msg)
+            
+            # Third button: Remediate Alias (runs against entire alias inventory)
+            if st.button(f"Remediate Alias {alias_display}", key=f"remediate_alias_{unique_key_hash}"):
+                token = st.session_state.get('remediation_token')
+                if not token:
+                    st.error("You must authenticate first. Please log in via the sidebar to obtain a valid token before attempting remediation.")
+                else:
+                    # Select playbook based on rule level
+                    level = violation.get('level', 'host')
+                    if level == 'storage':
+                        playbook_name = 'e-vmotion-storage'
+                    else:
+                        playbook_name = 'e-vmotion-server'
+                    
+                    # Use the same alias extraction logic
+                    if violation['alias'] is not None:
+                        alias = violation['alias']
+                    elif violation['affected_vms']:
+                        first_vm = violation['affected_vms'][0]
+                        if first_vm.startswith('z-cockroach-'):
+                            parts = first_vm.split('-')
+                            if len(parts) >= 3:
+                                alias = f"cockroach-{parts[2]}"
+                            else:
+                                alias = first_vm
+                        else:
+                            alias = first_vm
+                    else:
+                        alias = 'unknown'
+                    
+                    success, msg = trigger_remediation_alias_api(alias, token, playbook_name=playbook_name)
+                    if success:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
 
     def display_grouped_violations(grouped_violations, cluster_name, show_only_powered_on):
         """Display multiple violations for the same alias/rule as a grouped violation"""
@@ -640,6 +742,41 @@ if page == "Compliance Dashboard":
                     
                     # Pass all affected VMs for grouped remediation
                     success, msg = trigger_remediation_api(alias, list(set(all_affected_vms)), token, playbook_name=playbook_name)
+                    if success:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+            
+            # Third button: Remediate Alias (runs against entire alias inventory)
+            if st.button(f"Remediate Alias {display_alias} (Grouped)", key=f"remediate_alias_grouped_{unique_key_hash}"):
+                token = st.session_state.get('remediation_token')
+                if not token:
+                    st.error("You must authenticate first. Please log in via the sidebar to obtain a valid token before attempting remediation.")
+                else:
+                    # Select playbook based on rule level
+                    level = first_violation.get('level', 'host')
+                    if level == 'storage':
+                        playbook_name = 'e-vmotion-storage'
+                    else:
+                        playbook_name = 'e-vmotion-server'
+                    
+                    # Use the same alias extraction logic
+                    if first_violation['alias'] is not None:
+                        alias = first_violation['alias']
+                    elif first_violation['affected_vms']:
+                        first_vm = first_violation['affected_vms'][0]
+                        if first_vm.startswith('z-cockroach-'):
+                            parts = first_vm.split('-')
+                            if len(parts) >= 3:
+                                alias = f"cockroach-{parts[2]}"
+                            else:
+                                alias = first_vm
+                        else:
+                            alias = first_vm
+                    else:
+                        alias = 'unknown'
+                    
+                    success, msg = trigger_remediation_alias_api(alias, token, playbook_name=playbook_name)
                     if success:
                         st.success(msg)
                     else:
